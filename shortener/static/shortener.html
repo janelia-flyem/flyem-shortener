@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+    <head>
+        <title>link shortener for neuroglancer state</title>
+        <style>
+            *{font-family: Verdana;}
+            label {
+                line-height: 2.0;
+            }
+            code {
+                font-family: 'Courier New', Courier, monospace
+            }
+        </style>
+    </head>
+    <body>
+        <h2>link shortener for neuroglancer state</h2>
+        <form action="/shortng" method="post">
+            <input type="hidden" id="client" name="client" value="web">
+
+            <label for="filename">filename (optional):</label>
+            <input type="text" id="filename" name="filename" value="", title="Name of the filename to store.  Slashes permitted, e.g. mylinks/link-1"><br>
+
+            <label for="title">title (optional, appears in tab name):</label>
+            <input type="text" id="title" name="title" value="" title="Overwrites the neuroglancer state title, setting the tab name."><br>
+
+            <label for="text">link:</label>
+            <input type="text" id="text" name="text" value="" size="100", title="Paste the entire neuroglancer link exactly as it appears in your browser URL bar."><br>
+            <br>
+            <input type="submit" value="store link state">
+        </form>
+        <br>
+        <br>
+        <hr>
+        Tip: In the FlyEM Slack workspace, this link shortener is available via<br>
+        the <code>/shortng</code> Slack command, albeit subject to Slack's limits on message size.
+    </body>
+</html>
