@@ -4,12 +4,12 @@ steps:
    args:
    - '-c'
    - |
-     docker pull gcr.io/flyem-private/ngsupport:latest || exit 0
+     docker pull gcr.io/flyem-private/flyem-shortener:latest || exit 0
  - name: 'gcr.io/cloud-builders/docker'
    args: [
             'build',
-            '-t', 'gcr.io/flyem-private/ngsupport:latest',
-            '--cache-from', 'gcr.io/flyem-private/ngsupport:latest',
+            '-t', 'gcr.io/flyem-private/flyem-shortener:latest',
+            '--cache-from', 'gcr.io/flyem-private/flyem-shortener:latest',
             '.'
           ]
-images: ['gcr.io/flyem-private/ngsupport:latest']
+images: ['gcr.io/flyem-private/flyem-shortener:latest']
