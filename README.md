@@ -1,8 +1,6 @@
 flyem-shortener
 ===============
 
-**in progress**
-
 This service generates short URLs for neuroglancer views, which are encoded in very long URLs. This functionality was originally housed in a [repository on Neuroglancer Hub](https://github.com/neuroglancerhub/ngsupport) and was split off from it. This repository generates a container that can be used with Google's "Cloud Run" service to run the link shortener.
 
 To build and upload the container with Google Cloudbuild registry:
@@ -14,7 +12,7 @@ To build FASTER using the most recent container as the cache:
     gcloud builds submit --config cloudbuild.yaml
 
 
-Alteratively, just use docker to build locally. 
+Alteratively, just use docker to build locally.
 
     docker build . -t gcr.io/flyem-private/flyem-shortener
 
@@ -30,4 +28,3 @@ Then:
 
 NOTE: None of the above commands will actually DEPLOY the container.
       The easiest way to do that is via the google cloud console.
-
