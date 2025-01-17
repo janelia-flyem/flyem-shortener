@@ -1,0 +1,14 @@
+.project
+.pydevproject
+.vscode/
+*.pyc
+*~
+
+.cache
+logs
+.test-data
+*.egg-info
+
+.DS_Store
+
+.idea
