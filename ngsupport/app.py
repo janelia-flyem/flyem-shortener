@@ -31,24 +31,6 @@ app = Flask(__name__)
 CORS(app)
 
 
-@app.route('/small-mesh')
-def _small_mesh():
-    from ngsupport.small_mesh import generate_and_store_mesh
-    return generate_and_store_mesh()
-
-
-@app.route('/block-mesh', methods=['POST'])
-def _block_mesh():
-    from ngsupport.small_mesh import gen_block_mesh
-    return gen_block_mesh()
-
-
-@app.route('/locate-body')
-def _locate_body():
-    from ngsupport.locate_body import locate_body
-    return locate_body()
-
-
 @app.route('/shortng', methods=['POST'])
 def _shortng():
     from ngsupport.shortng import shortng
@@ -59,31 +41,6 @@ def _shortng():
 def _shortener():
     from ngsupport.shortng import shortener
     return shortener()
-
-
-@app.route('/neuronjson_segment_properties/<server>/<uuid>/<instance>/<label>/info')
-@app.route('/neuronjson_segment_properties/<server>/<uuid>/<instance>/<label>/<altlabel>/info')
-def _neuronjson_segment_properties_info(server, uuid, instance, label, altlabel=None):
-    from ngsupport.neuronjson_segment_properties import neuronjson_segment_properties_info
-    return neuronjson_segment_properties_info(server, uuid, instance, label, altlabel)
-
-
-@app.route('/neuronjson_segment_tags_properties/<server>/<uuid>/<instance>/<tags>/info')
-def _neuronjson_segment_tags_properties_info(server, uuid, instance, tags):
-    from ngsupport.neuronjson_segment_properties import neuronjson_segment_tags_properties_info
-    return neuronjson_segment_tags_properties_info(server, uuid, instance, tags)
-
-
-@app.route('/neuronjson_segment_synapse_properties/<server>/<uuid>/<instance>/<int:n>/info')
-def _neuronjson_segment_synapse_properties_info(server, uuid, instance, n):
-    from ngsupport.neuronjson_segment_properties import neuronjson_segment_synapse_properties_info
-    return neuronjson_segment_synapse_properties_info(server, uuid, instance, n)
-
-
-@app.route('/neuronjson_segment_note_properties/<server>/<uuid>/<instance>/<propname>/<int:n>/info')
-def _neuronjson_segment_note_properties_info(server, uuid, instance, propname, n):
-    from ngsupport.neuronjson_segment_properties import neuronjson_segment_note_properties_info
-    return neuronjson_segment_note_properties_info(server, uuid, instance, propname, n)
 
 
 if __name__ == "__main__":
