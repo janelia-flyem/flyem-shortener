@@ -33,13 +33,13 @@ CORS(app)
 
 @app.route('/shortng', methods=['POST'])
 def _shortng():
-    from ngsupport.shortng import shortng
+    from shortener.shortng import shortng
     return shortng()
 
 
 @app.route('/shortener.html')
 def _shortener():
-    from ngsupport.shortng import shortener
+    from shortener.shortng import shortener
     return shortener()
 
 
