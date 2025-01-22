@@ -336,8 +336,6 @@ def _web_response(url, bucket_path):
     """
     download_url = f"https://storage.googleapis.com/{bucket_path}"
 
-    # FIXME: The proper way to do this is with a jinja template.
-
     script = """
         <script type="text/javascript">
         function copy_to_clipboard(text) {
@@ -353,9 +351,40 @@ def _web_response(url, bucket_path):
 
     style = """
         <style>
-            *{font-family: Verdana;}
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f9;
+                margin: 0;
+                padding: 0;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+            }
+            .container {
+                background-color: #fff;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+                max-width: 600px;
+                width: 100%;
+            }
+            h3, h4 {
+                color: #333;
+                text-align: center;
+            }
             a {
-                text-decoration: none
+                text-decoration: none;
+                color: #007bff;
+            }
+            a:hover {
+                color: #0056b3;
+            }
+            .links {
+                display: flex;
+                justify-content: center;
+                gap: 10px;
+                margin-top: 20px;
             }
         </style>
         """
@@ -369,14 +398,16 @@ def _web_response(url, bucket_path):
         {script}
         </head>
         <body>
-        <h3>
-            <a href={url}>{url}</a>
-        </h3>
-        <h4>
-            <a href="" onclick="copy_to_clipboard('{url}'); return false;">[copy link]</a>
-            <a href={download_url}>[view json]</a>
-            <a href=shortener.html>[start over]</a>
-        </h4>
+        <div class="container">
+            <h3>
+                <a href="{url}">{url}</a>
+            </h3>
+            <div class="links">
+                <a href="" onclick="copy_to_clipboard('{url}'); return false;">[copy link]</a>
+                <a href="{download_url}">[view json]</a>
+                <a href="shortener.html">[start over]</a>
+            </div>
+        </div>
         </body>
         </html>""")
     return Response(page, 200, mimetype='text/html')
