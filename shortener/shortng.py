@@ -14,6 +14,11 @@ logger = logging.getLogger(__name__)
 SHORTNG_BUCKET = 'flyem-user-links'  # Owned by FlyEM-Private
 SHORTENER_URL = "https://shortng-bmcp5imp6q-uc.a.run.app/shortener.html"
 
+# expiration range on link editing; use one week
+EDIT_EXPIRATION = datetime.timedelta(days=7)
+# if we need effectively no expiration, use this:
+# EDIT_EXPIRATION = datetime.timedelta.max
+
 
 class ErrMsg(RuntimeError):
     def __init__(self, msg, from_slack):
@@ -65,7 +70,15 @@ def _shortng():
     if title:
         state['title'] = title
 
-    bucket_path = _upload_state(state, filename)
+    client = _initialize_client()
+
+    if not _is_editable(client, filename):
+        msg = (
+            "This link is too old to be edited. Please create a new link instead."
+        )
+        raise ErrMsg(msg, from_slack)
+
+    bucket_path = _upload_state(client, state, filename)
     url = f'{url_base}#!gs://{bucket_path}'
     logger.info(f"Completed {url}")
 
@@ -75,6 +88,20 @@ def _shortng():
         return _web_response(url, bucket_path)
     else:
         return Response(url, 200)
+
+
+def _initialize_client():
+    # HACK:
+    # I store the *contents* of the credentials in the environment
+    # via the CloudRun settings, but the google API wants a filepath,
+    # not a JSON string.
+    # So I write the JSON text into a file before uploading.
+    _fd, creds_path = tempfile.mkstemp('.json')
+    with open(creds_path, 'w') as f:
+        f.write(os.environ['GOOGLE_APPLICATION_CREDENTIALS_CONTENTS'])
+    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = creds_path
+
+    return storage.Client.from_service_account_json(os.environ['GOOGLE_APPLICATION_CREDENTIALS'])
 
 
 def _parse_request():
@@ -168,34 +195,45 @@ def _parse_state(link, from_slack):
     return url_base, state
 
 
-def _upload_state(state, filename):
+def _blob_name(filename):
+    """
+    Build a blob name for the given filename.
+    """
+    return f"short/{filename}"
+
+
+def _is_editable(client, filename):
+    """
+    Determine whether the given filename is still editable.
+    """
+
+    bucket = client.get_bucket(SHORTNG_BUCKET)
+    blob = bucket.get_blob(_blob_name(filename))
+    if blob is None or not blob.exists():
+        # doesn't exist = OK to create
+        return True
+
+    created_time = blob.time_created
+    return created_time + EDIT_EXPIRATION > datetime.datetime.now(datetime.timezone.utc)
+
+
+def _upload_state(client, state, filename):
     """
     Upload the given JSON state to a file in our (hard-coded) google storage bucket.
     """
-    # HACK:
-    # I store the *contents* of the credentials in the environment
-    # via the CloudRun settings, but the google API wants a filepath,
-    # not a JSON string.
-    # So I write the JSON text into a file before uploading.
-    _fd, creds_path = tempfile.mkstemp('.json')
-    with open(creds_path, 'w') as f:
-        f.write(os.environ['GOOGLE_APPLICATION_CREDENTIALS_CONTENTS'])
-    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = creds_path
 
     state_string = json.dumps(state, indent=2)
-    _upload_to_bucket(f'short/{filename}', state_string, SHORTNG_BUCKET)
+    _upload_to_bucket(client, _blob_name(filename), state_string, SHORTNG_BUCKET)
 
-    bucket_path = f'{SHORTNG_BUCKET}/short/{filename}'
+    bucket_path = f'{SHORTNG_BUCKET}/{_blob_name(filename)}'
     return bucket_path
 
 
-def _upload_to_bucket(blob_name, blob_contents, bucket_name):
+def _upload_to_bucket(client, blob_name, blob_contents, bucket_name):
     """
     Upload a blob of data to the specified google storage bucket.
     """
-    storage_client = storage.Client.from_service_account_json(
-        os.environ['GOOGLE_APPLICATION_CREDENTIALS'])
-    bucket = storage_client.get_bucket(bucket_name)
+    bucket = client.get_bucket(bucket_name)
     blob = bucket.blob(blob_name)
     blob.cache_control = 'public, no-store'
     blob.upload_from_string(blob_contents, content_type='application/json')
