@@ -1,3 +1,4 @@
+import enum
 import os
 import logging
 import datetime
@@ -14,6 +15,12 @@ logger = logging.getLogger(__name__)
 SHORTNG_BUCKET = 'flyem-user-links'  # Owned by FlyEM-Private
 SHORTENER_URL = "https://shortng-bmcp5imp6q-uc.a.run.app/shortener.html"
 
+class RequestSource(enum.Enum):
+    WEB = "web"
+    SLACK = "slack"
+    API_PLAIN = "api_plain"
+    API_JSON = "api_json"
+
 # expiration range on link editing; use one week
 EDIT_EXPIRATION = datetime.timedelta(days=7)
 # if we need effectively no expiration, use this:
@@ -21,12 +28,12 @@ EDIT_EXPIRATION = datetime.timedelta(days=7)
 
 
 class ErrMsg(RuntimeError):
-    def __init__(self, msg, from_slack):
+    def __init__(self, msg, source):
         self.msg = msg
-        self.from_slack = from_slack
+        self.source = source
 
     def response(self):
-        if self.from_slack:
+        if self.source in [RequestSource.SLACK, RequestSource.API_JSON]:
             return jsonify({"text": self.msg, "response_type": "ephemeral"})
         return Response(self.msg, 400)
 
@@ -65,32 +72,33 @@ def _shortng():
 
     If no filename is provided, we construct a filename using a timestamp.
     """
-    filename, title, link, from_slack, from_web = _parse_request()
-    url_base, state = _parse_state(link, from_slack)
+    filename, title, link, source = _parse_request()
+    url_base, state = _parse_state(link, source)
     if title:
         state['title'] = title
 
-    client = _initialize_client()
+    client = _initialize_google_cloud_client()
 
     if not _is_editable(client, filename):
         msg = (
             "This link is too old to be edited. Please create a new link instead."
         )
-        raise ErrMsg(msg, from_slack)
+        raise ErrMsg(msg, source)
 
     bucket_path = _upload_state(client, state, filename)
     url = f'{url_base}#!gs://{bucket_path}'
     logger.info(f"Completed {url}")
 
-    if from_slack:
-        return jsonify({"text": url, "response_type": "ephemeral"})
-    elif from_web:
-        return _web_response(url, bucket_path)
-    else:
-        return Response(url, 200)
+    match source:
+        case RequestSource.SLACK:
+            return jsonify({"text": url, "response_type": "ephemeral"})
+        case RequestSource.WEB:
+            return _web_response(url, bucket_path)
+        case RequestSource.API_PLAIN | RequestSource.API_JSON:
+            return Response(url, 200)
 
 
-def _initialize_client():
+def _initialize_google_cloud_client():
     # HACK:
     # I store the *contents* of the credentials in the environment
     # via the CloudRun settings, but the google API wants a filepath,
@@ -104,63 +112,114 @@ def _initialize_client():
     return storage.Client.from_service_account_json(os.environ['GOOGLE_APPLICATION_CREDENTIALS'])
 
 
-def _parse_request():
-    """
-    Extract basic fields from the request and make
-    minor tweaks to them if needed (e.g. remove spaces).
-
-    Returns:
-        (filename, title, link, from_slack, from_web)
-        where from_slack means the Slackbot sent the request
-        and from_web means the web UI sent the request.
-    """
-    from_slack = ('Slackbot' in request.headers.get('User-Agent'))
-    logger.info(f"from_slack: {from_slack}")
-
-    from_web = (request.form.get('client') == 'web')
-    logger.info(f"from_web: {from_web}")
-
+def _parse_web_request():
     title = request.form.get('title', None)
-    if 'text' in request.form:
-        # https://api.slack.com/interactivity/slash-commands#app_command_handling
-        data = request.form['text'].strip()
-    else:
-        # For simple testing.
-        data = request.data.decode('utf-8').strip()
+    filename = request.form.get('filename', None)
+    link = (request.form.get('text', None))
+    if link is not None:
+        link = link.strip()
+    return filename, title, link
 
-    data = data.replace('`', '').strip()
-    if data == "" and from_slack:
+
+def _parse_slack_request():
+    title = None
+    text_data = request.form.get('text', None)
+
+    # remove Slack "code" formatting in the /shortng command input
+    text_data.replace('`', '').strip()
+
+    if text_data == "":
         msg = (
             "No link provided. Use one of the following formats:\n"
             "```/shortng my-filename https://clio-ng.janelia.org/...```\n\n"
             "```/shortng https://clio-ng.janelia.org/...```\n\n"
             "Alternatively, try the web interface:\n"
             f"{SHORTENER_URL}")
-        raise ErrMsg(msg, from_slack)
+        raise ErrMsg(msg, RequestSource.SLACK)
 
-    name_and_link = data.split(' ')
+    name_and_link = text_data.split(' ')
     if len(name_and_link) == 0:
-        raise ErrMsg("Error: No link provided", from_slack)
+        raise ErrMsg("Error: No link provided", RequestSource.SLACK)
 
-    if len(name_and_link) == 1 or name_and_link[0] == '{':
-        filename = request.form.get('filename', None)
-        filename = filename or datetime.datetime.now().strftime('%Y-%m-%d.%H%M%S.%f')
-        link = data
+    # Stuart gets the link from the original, unsplit data for some reason
+    if len(name_and_link) == 1:
+        filename = None
+        link = text_data
     else:
         filename = name_and_link[0]
-        link = data[len(filename):].strip()
+        link = text_data[len(filename):].strip()
+
+    return filename, title, link
+
+
+def _parse_api_request(source):
+    if request.headers.get('Content-Type') == 'application/json':
+        data = json.loads(request.data)
+    else:
+        data = request.form
+    title = data.get('title', None)
+    filename = data.get('filename', None)
+
+    # we don't care if title or filename are empty, but we need a link
+    link = data.get('text', None)
+    if link is not None:
+        link = link.strip()
+    if not link:
+        raise ErrMsg("No link was provided!", source)
+
+    return filename, title, link
+
+
+def _parse_request():
+    """
+    Extract basic fields from the request and make
+    minor tweaks to them if needed (e.g. remove spaces).
+
+    Returns:
+        (filename, title, link, request source)
+    """
+
+    if "Slackbot" in request.headers.get('User-Agent'):
+        source = RequestSource.SLACK
+    elif request.form.get('client') == 'web':
+        source = RequestSource.WEB
+    elif request.headers.get('Content-Type') == 'application/json':
+        source = RequestSource.API_JSON
+    else:
+        source = RequestSource.API_PLAIN
+    logger.info(f"source: {source}")
+
+    match source:
+        case RequestSource.WEB:
+            filename, title, link = _parse_web_request()
+        case RequestSource.SLACK:
+            filename, title, link = _parse_slack_request()
+        case RequestSource.API_PLAIN | RequestSource.API_JSON:
+            filename, title, link = _parse_api_request(source)
+
+    if link is None:
+        raise ErrMsg("No link was provided!", source)
+
+    return _process_filename(filename), title, link, source
+
+
+def _process_filename(filename):
+    """
+    common filename processing steps
+    """
+    # default datetime filename
+    if not filename:
+        filename = datetime.datetime.now().strftime('%Y-%m-%d.%H%M%S.%f')
 
     if not filename.endswith('.json'):
         filename += '.json'
 
-    # We don't even handle spaces via the slack UI, but spaces
-    # might be present if the user used the web UI.  Replace them.
+    # remove spaces from filename
     filename = filename.replace(' ', '_')
 
-    return filename, title, link, from_slack, from_web
+    return filename
 
-
-def _parse_state(link, from_slack):
+def _parse_state(link, source):
     """
     Extract the neuroglancer state JSON data from the given link.
     Raise ErrMsg if something went wrong.
@@ -174,23 +233,23 @@ def _parse_state(link, from_slack):
                 "It appears that JSON was provided instead of "
                 f"a link, but I couldn't parse the JSON:\n{link}"
             )
-            raise ErrMsg(msg, from_slack) from ex
+            raise ErrMsg(msg, source) from ex
 
     try:
         url_base, encoded_json = link.split('#!')
         encoded_json = urllib.parse.unquote(encoded_json)
         state = json.loads(encoded_json)
     except ValueError as ex:
-        if from_slack:
+        if source is RequestSource.SLACK:
             link = f"```{link}```"
         msg = f"Could not parse link:\n\n{link}"
         logger.error(msg)
-        raise ErrMsg(msg, from_slack) from ex
+        raise ErrMsg(msg, source) from ex
 
     if not (url_base.startswith('http://') or url_base.startswith('https://')):
         msg = "Error: Filename must not contain spaces, and links must start with http or https"
         logger.error(msg)
-        raise ErrMsg(msg, from_slack)
+        raise ErrMsg(msg, source)
 
     return url_base, state
 

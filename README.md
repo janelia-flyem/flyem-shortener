@@ -28,3 +28,9 @@ Then:
 
 NOTE: None of the above commands will actually DEPLOY the container.
       The easiest way to do that is via the google cloud console.
+
+To run the (minimal, incomplete) tests:
+
+    cd flyem-shortener
+    python -m unittest
+
