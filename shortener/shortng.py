@@ -372,7 +372,7 @@ def _web_response(url, bucket_path):
                 color: #333;
                 margin: 10px 0;
             }
-            button {
+            button, .button {
                 background-color: #007bff;
                 color: white;
                 border: none;
@@ -381,8 +381,10 @@ def _web_response(url, bucket_path):
                 border-radius: 5px;
                 cursor: pointer;
                 font-size: 16px;
+                font-weight: normal;
+                text-decoration:none;
             }
-            button:hover {
+            button:hover, .button:hover {
                 background-color: #0056b3;
             }
         </style>
@@ -404,8 +406,8 @@ def _web_response(url, bucket_path):
                 <p><a href="{url}">{url}</a></p>
                 <h4>
                     <button onclick="copy_to_clipboard('{url}'); return false;">Copy Link</button>
-                    <button onclick="window.location.href='{download_url}'">View JSON</button>
-                    <button onclick="window.location.href='shortener.html'">Start Over</button>
+                    <a class="button" href="{download_url}">View JSON</a>
+                    <a class="button" href="shortener.html">Start Over</a>
                 </h4>
             </div>
         </body>
