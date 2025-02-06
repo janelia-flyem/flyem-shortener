@@ -4,7 +4,6 @@ import datetime
 import tempfile
 import json
 import urllib
-from textwrap import dedent
 
 from google.cloud import storage
 from flask import Response, request, current_app, jsonify
@@ -201,11 +200,10 @@ def _upload_to_bucket(blob_name, blob_contents, bucket_name):
     blob.upload_from_string(blob_contents, content_type='application/json')
     return blob.public_url
 
-
 def _web_response(url, bucket_path):
     """
     Return a little HTML page to display the shortened URL,
-    along with some convenient links.
+    along with some convenient buttons.
     """
     download_url = f"https://storage.googleapis.com/{bucket_path}"
 
@@ -225,8 +223,8 @@ def _web_response(url, bucket_path):
     style = """
         <style>
             body {
-                font-family: Arial, sans-serif;
-                background-color: #f4f4f9;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background-color: #f0f2f5;
                 margin: 0;
                 padding: 0;
                 display: flex;
@@ -235,52 +233,55 @@ def _web_response(url, bucket_path):
                 height: 100vh;
             }
             .container {
-                background-color: #fff;
-                padding: 20px;
-                border-radius: 8px;
-                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-                max-width: 600px;
+                background-color: #ffffff;
+                padding: 30px;
+                border-radius: 10px;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                max-width: 500px;
                 width: 100%;
+                text-align: center;
             }
             h3, h4 {
                 color: #333;
-                text-align: center;
+                margin: 10px 0;
             }
-            a {
-                text-decoration: none;
-                color: #007bff;
+            button {
+                background-color: #007bff;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                margin: 5px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 16px;
             }
-            a:hover {
-                color: #0056b3;
-            }
-            .links {
-                display: flex;
-                justify-content: center;
-                gap: 10px;
-                margin-top: 20px;
+            button:hover {
+                background-color: #0056b3;
             }
         </style>
         """
 
-    page = dedent(f"""\
+    page = f"""
         <!doctype html>
-        <html>
+        <html lang="en">
         <head>
-        <title>Shortened link</title>
-        {style}
-        {script}
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Shortened link</title>
+            {style}
+            {script}
         </head>
         <body>
-        <div class="container">
-            <h3>
-                <a href="{url}">{url}</a>
-            </h3>
-            <div class="links">
-                <a href="" onclick="copy_to_clipboard('{url}'); return false;">[copy link]</a>
-                <a href="{download_url}">[view json]</a>
-                <a href="shortener.html">[start over]</a>
+            <div class="container">
+                <h3>Your shortened link:</h3>
+                <p><a href="{url}">{url}</a></p>
+                <h4>
+                    <button onclick="copy_to_clipboard('{url}'); return false;">Copy Link</button>
+                    <button onclick="window.location.href='{download_url}'">View JSON</button>
+                    <button onclick="window.location.href='shortener.html'">Start Over</button>
+                </h4>
             </div>
-        </div>
         </body>
-        </html>""")
+        </html>
+        """
     return Response(page, 200, mimetype='text/html')
