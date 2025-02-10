@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 SHORTNG_BUCKET = 'flyem-user-links'  # Owned by FlyEM-Private
 SHORTENER_URL = "https://shortng-bmcp5imp6q-uc.a.run.app/shortener.html"
+CLIO_URL = "https://clio-ng.janelia.org/"
 
 class RequestSource(enum.Enum):
     WEB = "web"
@@ -26,6 +27,8 @@ EDIT_EXPIRATION = datetime.timedelta(days=7)
 # if we need effectively no expiration, use this:
 # EDIT_EXPIRATION = datetime.timedelta.max
 
+# this holds the Google Cloud Storage client, once created
+_client = None
 
 class ErrMsg(RuntimeError):
     def __init__(self, msg, source):
@@ -73,19 +76,25 @@ def _shortng():
     If no filename is provided, we construct a filename using a timestamp.
     """
     filename, title, link, source = _parse_request()
-    url_base, state = _parse_state(link, source)
+
+    # check if it's a shortened link:
+    if link.startswith(CLIO_URL) and link.endswith('.json'):
+        url_base = CLIO_URL
+        state = _get_short_link_state(link, source)
+    else:
+        # it's a neuroglancer link or json state
+        url_base, state = _parse_state(link, source)
+
     if title:
         state['title'] = title
 
-    client = _initialize_google_cloud_client()
-
-    if not _is_editable(client, filename):
+    if not _is_editable(filename):
         msg = (
             "This link is too old to be edited. Please create a new link instead."
         )
         raise ErrMsg(msg, source)
 
-    bucket_path = _upload_state(client, state, filename)
+    bucket_path = _upload_state(state, filename)
     url = f'{url_base}#!gs://{bucket_path}'
     logger.info(f"Completed {url}")
 
@@ -97,6 +106,11 @@ def _shortng():
         case RequestSource.API_PLAIN | RequestSource.API_JSON:
             return Response(url, 200)
 
+def _get_client():
+    global _client
+    if _client is None:
+        _client = _initialize_google_cloud_client()
+    return _client
 
 def _initialize_google_cloud_client():
     # HACK:
@@ -131,8 +145,8 @@ def _parse_slack_request():
     if text_data == "":
         msg = (
             "No link provided. Use one of the following formats:\n"
-            "```/shortng my-filename https://clio-ng.janelia.org/...```\n\n"
-            "```/shortng https://clio-ng.janelia.org/...```\n\n"
+            f"```/shortng my-filename {CLIO_URL}...```\n\n"
+            f"```/shortng {CLIO_URL}...```\n\n"
             "Alternatively, try the web interface:\n"
             f"{SHORTENER_URL}")
         raise ErrMsg(msg, RequestSource.SLACK)
@@ -196,6 +210,8 @@ def _parse_request():
             filename, title, link = _parse_slack_request()
         case RequestSource.API_PLAIN | RequestSource.API_JSON:
             filename, title, link = _parse_api_request(source)
+        case _:
+            filename, title, link = None, None, None
 
     if link is None:
         raise ErrMsg("No link was provided!", source)
@@ -224,10 +240,12 @@ def _parse_state(link, source):
     Extract the neuroglancer state JSON data from the given link.
     Raise ErrMsg if something went wrong.
     """
+
+    # we allow JSON to be provided directly in the link
     if link.startswith('{'):
         try:
             state = json.loads(link)
-            return 'https://clio-ng.janelia.org', state
+            return CLIO_URL, state
         except ValueError as ex:
             msg = (
                 "It appears that JSON was provided instead of "
@@ -235,6 +253,8 @@ def _parse_state(link, source):
             )
             raise ErrMsg(msg, source) from ex
 
+
+    # otherwise, we expect a link copied from neuroglancer
     try:
         url_base, encoded_json = link.split('#!')
         encoded_json = urllib.parse.unquote(encoded_json)
@@ -253,6 +273,16 @@ def _parse_state(link, source):
 
     return url_base, state
 
+def _get_short_link_state(link, source):
+    blob_name = link.removeprefix(f"{CLIO_URL}#!gs://flyem-user-links/")
+    bucket = _get_client().get_bucket(SHORTNG_BUCKET)
+    blob = bucket.get_blob(blob_name)
+    if blob is None or not blob.exists():
+        msg = f"Could not find a link with the name {blob_name}"
+        logger.error(msg)
+        raise ErrMsg(msg, source)
+    return json.loads(blob.download_as_bytes())
+
 
 def _blob_name(filename):
     """
@@ -261,12 +291,12 @@ def _blob_name(filename):
     return f"short/{filename}"
 
 
-def _is_editable(client, filename):
+def _is_editable(filename):
     """
     Determine whether the given filename is still editable.
     """
 
-    bucket = client.get_bucket(SHORTNG_BUCKET)
+    bucket = _get_client().get_bucket(SHORTNG_BUCKET)
     blob = bucket.get_blob(_blob_name(filename))
     if blob is None or not blob.exists():
         # doesn't exist = OK to create
@@ -276,23 +306,23 @@ def _is_editable(client, filename):
     return created_time + EDIT_EXPIRATION > datetime.datetime.now(datetime.timezone.utc)
 
 
-def _upload_state(client, state, filename):
+def _upload_state(state, filename):
     """
     Upload the given JSON state to a file in our (hard-coded) google storage bucket.
     """
 
     state_string = json.dumps(state, indent=2)
-    _upload_to_bucket(client, _blob_name(filename), state_string, SHORTNG_BUCKET)
+    _upload_to_bucket(_blob_name(filename), state_string, SHORTNG_BUCKET)
 
     bucket_path = f'{SHORTNG_BUCKET}/{_blob_name(filename)}'
     return bucket_path
 
 
-def _upload_to_bucket(client, blob_name, blob_contents, bucket_name):
+def _upload_to_bucket(blob_name, blob_contents, bucket_name):
     """
     Upload a blob of data to the specified google storage bucket.
     """
-    bucket = client.get_bucket(bucket_name)
+    bucket = _get_client().get_bucket(bucket_name)
     blob = bucket.blob(blob_name)
     blob.cache_control = 'public, no-store'
     blob.upload_from_string(blob_contents, content_type='application/json')
