@@ -44,6 +44,13 @@
             border-radius: 5px;
             font-size: 16px;
         }
+        input[type="password"] {
+            padding: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
         input[type="submit"] {
             padding: 12px;
             background-color: #007bff;
@@ -82,6 +89,9 @@
 
             <label for="title">Title (optional, appears in tab name):</label>
             <input type="text" id="title" name="title" placeholder="e.g. Neuroglancer State" title="Overwrites the neuroglancer state title, setting the tab name.">
+
+            <label for="password">Password (optional):</label>
+            <input type="password" id="password" name="password" placeholder="e.g. mySecretPassword" title="Required to re-save link with same filename in the future.">
 
             <label for="text">Link:</label>
             <input type="text" id="text" name="text" placeholder="Paste the neuroglancer link here" title="Paste the entire neuroglancer link exactly as it appears in your browser URL bar.">
