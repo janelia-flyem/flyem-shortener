@@ -116,7 +116,7 @@ def _shortng():
                 )
                 raise ErrMsg(msg)
         else:
-            # no pwd; check time
+            # no password; check time
             if not _is_editable_age(filename):
                 msg = (
                     "This link is too old to be edited. Please create a new link instead."
@@ -128,11 +128,13 @@ def _shortng():
     url = f'{url_base}#!gs://{bucket_path}'
     logger.info(f"Completed {url}")
 
-    # if password was provided and password file doesn't exist, store it
+    # if password was provided and password file doesn't exist, store it; we store
+    #    in individual files per link to avoid race conditions
     if password and not has_password_file:
         salt = _new_salt()
         hashed_password = _hash_password(password, salt)
         _store_password_salt(password_filename, hashed_password, salt)
+        logger.info(f"Stored password for {password_filename}")
 
     # and finally the response to the user
     match source:
@@ -176,7 +178,6 @@ def _parse_web_request():
 
 
 def _parse_slack_request():
-    title = None
     text_data = request.form.get('text', None)
 
     # remove Slack "code" formatting in the /shortng command input
@@ -203,9 +204,11 @@ def _parse_slack_request():
         filename = name_and_link[0]
         link = text_data[len(filename):].strip()
 
-    # our Slackbot does not support passwords at this time
+    # our Slackbot does not support titles or passwords at this time
+    title = None
+    password = None
 
-    return filename, title, None, link
+    return filename, title, password, link
 
 
 def _parse_api_request():
@@ -244,7 +247,7 @@ def _parse_request():
         source = RequestSource.API_JSON
     else:
         source = RequestSource.API_PLAIN
-    logger.info(f"source: {source}")
+    logger.info(f"Request source: {source}")
 
     match source:
         case RequestSource.WEB:
@@ -384,7 +387,7 @@ def _is_editable_age(filename):
     bucket = _get_client().get_bucket(SHORTNG_BUCKET)
     blob = bucket.get_blob(_blob_name(filename))
     if blob is None or not blob.exists():
-        # doesn't exist = OK to create
+        # doesn't exist = OK to edit/create
         return True
 
     created_time = blob.time_created
@@ -424,6 +427,7 @@ def _upload_to_bucket(blob_name, blob_contents, bucket_name):
     blob.cache_control = 'public, no-store'
     blob.upload_from_string(blob_contents, content_type='application/json')
     return blob.public_url
+
 
 def _web_response(url, bucket_path):
     """
