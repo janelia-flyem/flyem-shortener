@@ -85,16 +85,16 @@
             <input type="hidden" id="client" name="client" value="web">
 
             <label for="filename">Filename (optional, appears in shortened link):</label>
-            <input type="text" id="filename" name="filename" placeholder="e.g. mylinks/link-1" title="Name of the filename to store. Slashes permitted, e.g. mylinks/link-1">
+            <input type="text" id="filename" name="filename" placeholder="e.g. mylinks/link-1" title="Name of the filename to store. Slashes permitted, e.g. mylinks/link-1"  value="{{ filename }}">
 
             <label for="title">Title (optional, appears in tab name):</label>
-            <input type="text" id="title" name="title" placeholder="e.g. Neuroglancer State" title="Overwrites the neuroglancer state title, setting the tab name.">
+            <input type="text" id="title" name="title" placeholder="e.g. Neuroglancer State" title="Overwrites the neuroglancer state title, setting the tab name."  value="{{ title }}">
 
             <label for="password">Password (optional):</label>
             <input type="password" id="password" name="password" placeholder="e.g. mySecretPassword" title="Required to re-save link with same filename in the future.">
 
             <label for="text">Link:</label>
-            <input type="text" id="text" name="text" placeholder="Paste the neuroglancer link here" title="Paste the entire neuroglancer link exactly as it appears in your browser URL bar.">
+            <input type="text" id="text" name="text" placeholder="Paste the neuroglancer link here" title="Paste the entire neuroglancer link exactly as it appears in your browser URL bar." value="{{ text }}">
 
             <input type="submit" value="Store Link State">
         </form>

@@ -8,12 +8,13 @@ import urllib
 import tempfile
 
 from google.cloud import storage
-from flask import Response, request, current_app, jsonify
+from flask import Response, request, jsonify, render_template
 
 logger = logging.getLogger(__name__)
 
 SHORTNG_BUCKET = 'flyem-user-links'  # Both buckets owned by FlyEM-Private
 SHORTNG_PASSWORD_BUCKET = 'flyem-user-links-private'
+
 SHORTENER_URL = "https://shortng-bmcp5imp6q-uc.a.run.app/shortener.html"
 CLIO_URL = "https://clio-ng.janelia.org/"
 
@@ -55,7 +56,10 @@ class ErrMsg(RuntimeError):
 
 
 def shortener():
-    return current_app.send_static_file('shortener.html')
+    filename = request.args.get('filename', "")
+    title = request.args.get('title', "")
+    text = request.args.get('text', "")
+    return render_template('shortener.html', filename=filename, title=title, text=text)
 
 
 def shortng():
