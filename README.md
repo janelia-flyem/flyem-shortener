@@ -15,6 +15,7 @@ The website and API share these input parameters:
     - the JSON state, either copied from `neuroglancer` or created programmatically
     - a previously shortened link, which will be re-saved under the new filename
 
+The `filename`, `title`, and `text` (link) fields of the form can be prepopulated through query parameters on the URL (eg, `?filename=my-shortened-link`). 
 
 ## API
 
