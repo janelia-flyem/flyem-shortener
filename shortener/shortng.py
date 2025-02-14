@@ -146,7 +146,9 @@ def _shortng():
             return jsonify({"text": url, "response_type": "ephemeral"})
         case RequestSource.WEB:
             return _web_response(url, bucket_path)
-        case RequestSource.API_PLAIN | RequestSource.API_JSON:
+        case RequestSource.API_JSON:
+            return jsonify({"link": url})
+        case RequestSource.API_PLAIN :
             return Response(url, 200)
 
 
