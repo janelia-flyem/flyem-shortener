@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 SHORTNG_BUCKET = 'flyem-user-links'  # Both buckets owned by FlyEM-Private
 SHORTNG_PASSWORD_BUCKET = 'flyem-user-links-private'
 
+BUCKET_LINK_SEPARATOR = "#!gs://flyem-user-links/"
+
 SHORTENER_URL = "https://shortng-bmcp5imp6q-uc.a.run.app/shortener.html"
 CLIO_URL = "https://clio-ng.janelia.org/"
 
@@ -97,9 +99,8 @@ def _shortng():
     ErrMsg.set_source(source)
 
     # check if it's a shortened link:
-    if link.startswith(CLIO_URL) and link.endswith('.json'):
-        url_base = CLIO_URL
-        state = _get_short_link_state(link)
+    if BUCKET_LINK_SEPARATOR in link:
+        url_base, state = _get_short_link_state(link)
     else:
         # it's a neuroglancer link or json state
         url_base, state = _parse_state(link)
@@ -297,6 +298,7 @@ def _parse_state(link):
     if link.startswith('{'):
         try:
             state = json.loads(link)
+            # we default to the clio URL even though it could be some other neuroglancer
             return CLIO_URL, state
         except ValueError as ex:
             msg = (
@@ -324,14 +326,16 @@ def _parse_state(link):
     return url_base, state
 
 def _get_short_link_state(link):
-    blob_name = link.removeprefix(f"{CLIO_URL}#!gs://flyem-user-links/")
+    # note that we don't really care about the URL base here; use whatever
+    #   neuroglancer you like, we just care about the blob name in the bucket
+    url_base, blob_name = link.split(BUCKET_LINK_SEPARATOR)
     bucket = _get_client().get_bucket(SHORTNG_BUCKET)
     blob = bucket.get_blob(blob_name)
     if blob is None or not blob.exists():
         msg = f"Could not find a link with the name {blob_name}"
         logger.error(msg)
         raise ErrMsg(msg)
-    return json.loads(blob.download_as_bytes())
+    return url_base, json.loads(blob.download_as_bytes())
 
 
 def _blob_name(filename):

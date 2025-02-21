@@ -13,6 +13,9 @@ PASSWORD = "myTestPassword"
 # this is not a valid neuroglancer link, but it's enough for testing parsing
 LINK = "http://neuroglancer.janelia.org"
 
+# for testing:
+HEMIBRAIN_URL = "https://neuroglancer-demo.appspot.com/"
+
 WEB_HEADERS = {
     'Content-Type': 'application/x-www-form-urlencoded',
     'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:68.0) Gecko/20100101 Firefox/68.0',
@@ -209,11 +212,11 @@ class StateParsingTestCase(unittest.TestCase):
         logger.setLevel(logging.WARNING)
         test_dir_base = os.path.dirname(__file__)
         self.hemibrain_link = open(os.path.join(test_dir_base, "default-hemibrain-url.txt"), 'rt').read()
-        self.hemibrain_json = json.loads(open(os.path.join(test_dir_base, "default-hemibrain.json"), 'rt').read())
+        self.hemibrain_json = json.loads(open(os.path.join(test_dir_base, "default-hemibrain-url.json"), 'rt').read())
 
     def test_parse_link(self):
         url, state = _parse_state(self.hemibrain_link)
-        self.assertEqual(url, CLIO_URL)
+        self.assertEqual(url, HEMIBRAIN_URL)
         self.assertEqual(state, self.hemibrain_json)
 
     def test_parse_link_invalid(self):
@@ -229,9 +232,14 @@ class StateParsingTestCase(unittest.TestCase):
         self.assertRaises(ErrMsg, _parse_state, "{'this isn't really': 'json', ][ 123}")
 
     def test_parse_short_link(self):
-        state = _get_short_link_state("https://clio-ng.janelia.org/#!gs://flyem-user-links/short/djo-test-link.json")
-        # this test file is known to have a different title; yes, this is really sloppy...
-        state["title"] = "Hemibrain"
+        url_base, state = _get_short_link_state("https://clio-ng.janelia.org/#!gs://flyem-user-links/short/djo-test-hemibrain.json")
+        self.assertEqual(url_base, "https://clio-ng.janelia.org/")
+        self.assertEqual(state, self.hemibrain_json)
+
+    def test_parse_short_link_other_neuroglancer(self):
+        # check we can parse short links from other neuroglancer instances
+        url_base, state = _get_short_link_state("https://neuroglancer-demo.appspot.com/#!gs://flyem-user-links/short/djo-test-hemibrain.json")
+        self.assertEqual(url_base, "https://neuroglancer-demo.appspot.com/")
         self.assertEqual(state, self.hemibrain_json)
 
     def test_parse_short_link_invalid(self):
