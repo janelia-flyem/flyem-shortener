@@ -99,30 +99,13 @@ def _shortng():
 
     url_base, state = _parse_state(link)
 
-    if title:
-        state['title'] = title
-
     # check if the link has already been shortened; if it has, check if
     #   it's editable (i.e. password is correct and it's not too old)
-    password_filename = filename.removesuffix('.json')
-    has_password_file = _file_exists(SHORTNG_PASSWORD_BUCKET, password_filename)
-    if _file_exists(SHORTNG_BUCKET, filename):
-        if has_password_file:
-            # check pwd
-            if not _is_editable_password(password_filename, password):
-                msg = (
-                    "A password is required to save this link again. The provided password is missing or incorrect."
-                )
-                raise ErrMsg(msg)
-        else:
-            # no password; check time
-            if not _is_editable_age(filename):
-                msg = (
-                    f"This link was last saved more than {EDIT_EXPIRATION} and cannot be resaved. Please create a new link instead, "
-                    f"or contact the site admin to reset the editing period. Note that links with passwords can "
-                    f"be edited indefinitely."
-                )
-                raise ErrMsg(msg)
+    has_password_file = _file_exists(SHORTNG_PASSWORD_BUCKET, _password_filename(filename))
+    _raise_if_not_editable(filename, has_password_file, password)
+
+    if title:
+        state['title'] = title
 
     # the actual work
     bucket_path = _upload_state(state, filename)
@@ -134,8 +117,8 @@ def _shortng():
     if password and not has_password_file:
         salt = _new_salt()
         hashed_password = _hash_password(password, salt)
-        _store_hashed_password_salt(password_filename, hashed_password, salt)
-        logger.info(f"Stored password for {password_filename}")
+        _store_hashed_password_salt(_password_filename(filename), hashed_password, salt)
+        logger.info(f"Stored password for {_password_filename(filename)}")
 
     # and finally the response to the user
     match source:
@@ -329,10 +312,11 @@ def _parse_state(link):
 
 
 def _blob_name(filename):
-    """
-    Build a blob name for the given filename.
-    """
     return f"short/{filename}"
+
+
+def _password_filename(filename):
+    return filename.removesuffix('.json')
 
 
 def _file_exists(bucket_name, filename):
@@ -377,6 +361,30 @@ def _is_editable_password(password_filename, password):
     stored_hashed_password, stored_salt = _get_stored_hashed_password(password_filename)
     hashed_input_password = _hash_password(password, stored_salt)
     return stored_hashed_password == hashed_input_password
+
+
+def _raise_if_not_editable(filename, has_password_file, password):
+    """
+    Raise an error if the given filename is not editable due to password
+    or age restrictions.
+    """
+    if _file_exists(SHORTNG_BUCKET, filename):
+        if has_password_file:
+            # check pwd
+            if not _is_editable_password(_password_filename(filename), password):
+                msg = (
+                    f"A password is required to overwite the link with filename {filename}. The provided password is missing or incorrect."
+                )
+                raise ErrMsg(msg)
+        else:
+            # no password; check time
+            if not _is_editable_age(filename):
+                msg = (
+                    f"This link was last saved more than {EDIT_EXPIRATION} and cannot be resaved. Please create a new link instead, "
+                    f"or contact the site admin to reset the editing period. Note that links with passwords can "
+                    f"be edited indefinitely."
+                )
+                raise ErrMsg(msg)
 
 
 def _is_editable_age(filename):
