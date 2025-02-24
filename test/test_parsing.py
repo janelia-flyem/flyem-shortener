@@ -215,35 +215,35 @@ class StateParsingTestCase(unittest.TestCase):
         self.hemibrain_json = json.loads(open(os.path.join(test_dir_base, "default-hemibrain-url.json"), 'rt').read())
 
     def test_parse_link(self):
-        url, state = _parse_state(self.hemibrain_link)
+        url, state = _parse_state(self.hemibrain_link, RequestSource.WEB)
         self.assertEqual(url, HEMIBRAIN_URL)
         self.assertEqual(state, self.hemibrain_json)
 
     def test_parse_link_invalid(self):
         # there are lots of ways this can fail; just try one
-        self.assertRaises(ErrMsg, _parse_state, "https://not a valid link/jsonstuff")
+        self.assertRaises(ErrMsg, _parse_state, "https://not a valid link/jsonstuff", RequestSource.WEB)
 
     def test_parse_json(self):
-        url, state = _parse_state(json.dumps(self.hemibrain_json))
+        url, state = _parse_state(json.dumps(self.hemibrain_json), RequestSource.API_JSON)
         self.assertEqual(url, CLIO_URL)
         self.assertEqual(state, self.hemibrain_json)
 
     def test_parse_json_invalid(self):
-        self.assertRaises(ErrMsg, _parse_state, "{'this isn't really': 'json', ][ 123}")
+        self.assertRaises(ErrMsg, _parse_state, "{'this isn't really': 'json', ][ 123}", RequestSource.API_JSON)
 
     def test_parse_short_link(self):
-        url_base, state = _parse_state("https://clio-ng.janelia.org/#!gs://flyem-user-links/short/djo-test-hemibrain.json")
+        url_base, state = _parse_state("https://clio-ng.janelia.org/#!gs://flyem-user-links/short/djo-test-hemibrain.json", RequestSource.WEB)
         self.assertEqual(url_base, "https://clio-ng.janelia.org/")
         self.assertEqual(state, self.hemibrain_json)
 
     def test_parse_short_link_other_neuroglancer(self):
         # check we can parse short links from other neuroglancer instances
-        url_base, state = _parse_state("https://neuroglancer-demo.appspot.com/#!gs://flyem-user-links/short/djo-test-hemibrain.json")
+        url_base, state = _parse_state("https://neuroglancer-demo.appspot.com/#!gs://flyem-user-links/short/djo-test-hemibrain.json", RequestSource.WEB)
         self.assertEqual(url_base, "https://neuroglancer-demo.appspot.com/")
         self.assertEqual(state, self.hemibrain_json)
 
     def test_parse_short_link_invalid(self):
-        self.assertRaises(ErrMsg, _parse_state, "https://clio-ng.janelia.org/#!gs://flyem-user-links/short/no-such-link-exists")
+        self.assertRaises(ErrMsg, _parse_state, "https://clio-ng.janelia.org/#!gs://flyem-user-links/short/no-such-link-exists", RequestSource.WEB)
 
 class RequestPasswordChecking(unittest.TestCase):
     """
@@ -257,8 +257,8 @@ class RequestPasswordChecking(unittest.TestCase):
 
     def test_check_password(self):
         # this is a known stored password
-        self.assertTrue(_is_editable_password("djo-test-pwd", "pwd-pwd"))
-        self.assertFalse(_is_editable_password("djo-test-pwd", "wrong-pwd"))
+        self.assertTrue(_is_editable_password("djo-test-pwd", "pwd-pwd", RequestSource.WEB))
+        self.assertFalse(_is_editable_password("djo-test-pwd", "wrong-pwd", RequestSource.WEB))
 
 
 if __name__ == '__main__':

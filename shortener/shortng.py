@@ -38,11 +38,9 @@ EDIT_EXPIRATION = datetime.timedelta(days=7)
 # EDIT_EXPIRATION = datetime.timedelta.max
 
 class ErrMsg(RuntimeError):
-    # I'm storing the source on the class so I don't have to pass it around
-    source = RequestSource.WEB
-
-    def __init__(self, msg):
+    def __init__(self, msg, source):
         self.msg = msg
+        self.source = source
 
     def response(self):
         if self.source in [RequestSource.SLACK, RequestSource.API_JSON]:
@@ -50,10 +48,6 @@ class ErrMsg(RuntimeError):
             json_response.status_code = 400
             return json_response
         return Response(self.msg, 400)
-
-    @classmethod
-    def set_source(cls, source):
-        cls.source = source
 
 
 def shortener():
@@ -95,14 +89,12 @@ def _shortng():
     """
     filename, title, password, link, source = _parse_request()
 
-    ErrMsg.set_source(source)
-
-    url_base, state = _parse_state(link)
+    url_base, state = _parse_state(link, source)
 
     # check if the link has already been shortened; if it has, check if
     #   it's editable (i.e. password is correct and it's not too old)
     has_password_file = _file_exists(SHORTNG_PASSWORD_BUCKET, _password_filename(filename))
-    _raise_if_not_editable(filename, has_password_file, password)
+    _raise_if_not_editable(filename, has_password_file, password, source)
 
     if title:
         state['title'] = title
@@ -157,7 +149,7 @@ def _parse_web_request():
     return filename, title, password, link
 
 
-def _parse_slack_request():
+def _parse_slack_request(source):
     text_data = request.form.get('text', None)
 
     # remove Slack "code" formatting in the /shortng command input
@@ -170,11 +162,11 @@ def _parse_slack_request():
             f"```/shortng {CLIO_URL}...```\n\n"
             "Alternatively, try the web interface:\n"
             f"{SHORTENER_URL}")
-        raise ErrMsg(msg)
+        raise ErrMsg(msg, source)
 
     name_and_link = text_data.split(' ')
     if len(name_and_link) == 0:
-        raise ErrMsg("Error: No link provided")
+        raise ErrMsg("Error: No link provided", source)
 
     if len(name_and_link) == 1:
         filename = None
@@ -190,7 +182,7 @@ def _parse_slack_request():
     return filename, title, password, link
 
 
-def _parse_api_request():
+def _parse_api_request(source):
     if request.headers.get('Content-Type') == 'application/json':
         data = json.loads(request.data)
     else:
@@ -204,7 +196,7 @@ def _parse_api_request():
     if link is not None:
         link = link.strip()
     if not link:
-        raise ErrMsg("No link was provided!")
+        raise ErrMsg("No link was provided!", source)
 
     return filename, title, password, link
 
@@ -232,14 +224,14 @@ def _parse_request():
         case RequestSource.WEB:
             filename, title, password, link = _parse_web_request()
         case RequestSource.SLACK:
-            filename, title, password, link = _parse_slack_request()
+            filename, title, password, link = _parse_slack_request(source)
         case RequestSource.API_PLAIN | RequestSource.API_JSON:
-            filename, title, password, link = _parse_api_request()
+            filename, title, password, link = _parse_api_request(source)
         case _:
             filename, title, password, link = None, None, None, None
 
     if link is None:
-        raise ErrMsg("No link was provided!")
+        raise ErrMsg("No link was provided!", source)
 
     return _process_filename(filename), title, password, link, source
 
@@ -260,7 +252,7 @@ def _process_filename(filename):
 
     return filename
 
-def _parse_state(link):
+def _parse_state(link, source):
     """
     Extract the neuroglancer state JSON data from the given link.
     Raise ErrMsg if something went wrong.
@@ -276,7 +268,7 @@ def _parse_state(link):
         if blob is None or not blob.exists():
             msg = f"Could not find a link with the name {blob_name}"
             logger.error(msg)
-            raise ErrMsg(msg)
+            raise ErrMsg(msg, source)
         return url_base, json.loads(blob.download_as_bytes())
 
 
@@ -290,7 +282,7 @@ def _parse_state(link):
             msg = (
                 f"It appears that JSON was provided instead of a link, but I couldn't parse the JSON:\n{link}"
             )
-            raise ErrMsg(msg) from ex
+            raise ErrMsg(msg, source) from ex
 
 
     # otherwise, we expect a link copied from neuroglancer
@@ -301,12 +293,12 @@ def _parse_state(link):
     except ValueError as ex:
         msg = f"Could not parse link:\n\n{link}"
         logger.error(msg)
-        raise ErrMsg(msg) from ex
+        raise ErrMsg(msg, source) from ex
 
     if not (url_base.startswith('http://') or url_base.startswith('https://')):
         msg = "Error: Filename must not contain spaces, and links must start with http or https"
         logger.error(msg)
-        raise ErrMsg(msg)
+        raise ErrMsg(msg, source)
 
     return url_base, state
 
@@ -328,14 +320,14 @@ def _file_exists(bucket_name, filename):
     return blob is not None and blob.exists()
 
 
-def _get_stored_hashed_password(filename):
+def _get_stored_hashed_password(filename, source):
     bucket = _get_client().get_bucket(SHORTNG_PASSWORD_BUCKET)
     blob_name = _blob_name(filename)
     blob = bucket.get_blob(blob_name)
     if blob is None or not blob.exists():
         msg = f"Could not retrieve password file with the name {blob_name} in {SHORTNG_PASSWORD_BUCKET}"
         logger.error(msg)
-        raise ErrMsg(msg)
+        raise ErrMsg(msg, source)
     data = blob.download_as_bytes()
     return data[:DKLEN_WIDTH], data[DKLEN_WIDTH:]
 
@@ -349,7 +341,7 @@ def _store_hashed_password_salt(password_filename, hashed_password, salt):
     _upload_to_bucket(blob_name, data, SHORTNG_PASSWORD_BUCKET)
 
 
-def _is_editable_password(password_filename, password):
+def _is_editable_password(password_filename, password, source):
     """
     Determine whether the given filename is still editable based on password.
     """
@@ -358,12 +350,12 @@ def _is_editable_password(password_filename, password):
     if not _file_exists(SHORTNG_PASSWORD_BUCKET, password_filename):
         return True
 
-    stored_hashed_password, stored_salt = _get_stored_hashed_password(password_filename)
+    stored_hashed_password, stored_salt = _get_stored_hashed_password(password_filename, source)
     hashed_input_password = _hash_password(password, stored_salt)
     return stored_hashed_password == hashed_input_password
 
 
-def _raise_if_not_editable(filename, has_password_file, password):
+def _raise_if_not_editable(filename, has_password_file, password, source):
     """
     Raise an error if the given filename is not editable due to password
     or age restrictions.
@@ -371,11 +363,11 @@ def _raise_if_not_editable(filename, has_password_file, password):
     if _file_exists(SHORTNG_BUCKET, filename):
         if has_password_file:
             # check pwd
-            if not _is_editable_password(_password_filename(filename), password):
+            if not _is_editable_password(_password_filename(filename), password, source):
                 msg = (
                     f"A password is required to overwite the link with filename {filename}. The provided password is missing or incorrect."
                 )
-                raise ErrMsg(msg)
+                raise ErrMsg(msg, source)
         else:
             # no password; check time
             if not _is_editable_age(filename):
@@ -384,7 +376,7 @@ def _raise_if_not_editable(filename, has_password_file, password):
                     f"or contact the site admin to reset the editing period. Note that links with passwords can "
                     f"be edited indefinitely."
                 )
-                raise ErrMsg(msg)
+                raise ErrMsg(msg, source)
 
 
 def _is_editable_age(filename):
