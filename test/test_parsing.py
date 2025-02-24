@@ -4,7 +4,7 @@ import os
 import unittest
 
 from shortener.app import app
-from shortener.shortng import (ErrMsg, _get_short_link_state, _is_editable_password, logger,
+from shortener.shortng import (ErrMsg, _is_editable_password, logger,
                                _parse_request, _parse_state, RequestSource, CLIO_URL)
 
 FILENAME = "test-filename"
@@ -232,18 +232,18 @@ class StateParsingTestCase(unittest.TestCase):
         self.assertRaises(ErrMsg, _parse_state, "{'this isn't really': 'json', ][ 123}")
 
     def test_parse_short_link(self):
-        url_base, state = _get_short_link_state("https://clio-ng.janelia.org/#!gs://flyem-user-links/short/djo-test-hemibrain.json")
+        url_base, state = _parse_state("https://clio-ng.janelia.org/#!gs://flyem-user-links/short/djo-test-hemibrain.json")
         self.assertEqual(url_base, "https://clio-ng.janelia.org/")
         self.assertEqual(state, self.hemibrain_json)
 
     def test_parse_short_link_other_neuroglancer(self):
         # check we can parse short links from other neuroglancer instances
-        url_base, state = _get_short_link_state("https://neuroglancer-demo.appspot.com/#!gs://flyem-user-links/short/djo-test-hemibrain.json")
+        url_base, state = _parse_state("https://neuroglancer-demo.appspot.com/#!gs://flyem-user-links/short/djo-test-hemibrain.json")
         self.assertEqual(url_base, "https://neuroglancer-demo.appspot.com/")
         self.assertEqual(state, self.hemibrain_json)
 
     def test_parse_short_link_invalid(self):
-        self.assertRaises(ErrMsg, _get_short_link_state, "https://clio-ng.janelia.org/#!gs://flyem-user-links/short/no-such-link-exists")
+        self.assertRaises(ErrMsg, _parse_state, "https://clio-ng.janelia.org/#!gs://flyem-user-links/short/no-such-link-exists")
 
 class RequestPasswordChecking(unittest.TestCase):
     """

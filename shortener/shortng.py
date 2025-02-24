@@ -1,11 +1,13 @@
 import datetime
 import enum
+import functools
 import hashlib
 import json
 import logging
 import os
 import urllib
 import tempfile
+from textwrap import dedent
 
 from google.cloud import storage
 from flask import Response, request, jsonify, render_template
@@ -34,9 +36,6 @@ class RequestSource(enum.Enum):
 EDIT_EXPIRATION = datetime.timedelta(days=7)
 # if we need effectively no expiration, use this:
 # EDIT_EXPIRATION = datetime.timedelta.max
-
-# this holds the Google Cloud Storage client, once created
-_client = None
 
 class ErrMsg(RuntimeError):
     # I'm storing the source on the class so I don't have to pass it around
@@ -98,12 +97,7 @@ def _shortng():
 
     ErrMsg.set_source(source)
 
-    # check if it's a shortened link:
-    if BUCKET_LINK_SEPARATOR in link:
-        url_base, state = _get_short_link_state(link)
-    else:
-        # it's a neuroglancer link or json state
-        url_base, state = _parse_state(link)
+    url_base, state = _parse_state(link)
 
     if title:
         state['title'] = title
@@ -124,7 +118,9 @@ def _shortng():
             # no password; check time
             if not _is_editable_age(filename):
                 msg = (
-                    "This link is too old to be edited. Please create a new link instead."
+                    f"This link was last saved more than {EDIT_EXPIRATION} and cannot be resaved. Please create a new link instead, "
+                    f"or contact the site admin to reset the editing period. Note that links with passwords can "
+                    f"be edited indefinitely."
                 )
                 raise ErrMsg(msg)
 
@@ -138,7 +134,7 @@ def _shortng():
     if password and not has_password_file:
         salt = _new_salt()
         hashed_password = _hash_password(password, salt)
-        _store_password_salt(password_filename, hashed_password, salt)
+        _store_hashed_password_salt(password_filename, hashed_password, salt)
         logger.info(f"Stored password for {password_filename}")
 
     # and finally the response to the user
@@ -153,14 +149,8 @@ def _shortng():
             return Response(url, 200)
 
 
+@functools.cache
 def _get_client():
-    global _client
-    if _client is None:
-        _client = _initialize_google_cloud_client()
-    return _client
-
-
-def _initialize_google_cloud_client():
     # HACK:
     # I store the *contents* of the credentials in the environment
     # via the CloudRun settings, but the google API wants a filepath,
@@ -188,7 +178,7 @@ def _parse_slack_request():
     text_data = request.form.get('text', None)
 
     # remove Slack "code" formatting in the /shortng command input
-    text_data.replace('`', '').strip()
+    text_data = text_data.strip(" `")
 
     if text_data == "":
         msg = (
@@ -203,7 +193,6 @@ def _parse_slack_request():
     if len(name_and_link) == 0:
         raise ErrMsg("Error: No link provided")
 
-    # Stuart gets the link from the original, unsplit data for some reason
     if len(name_and_link) == 1:
         filename = None
         link = text_data
@@ -294,7 +283,21 @@ def _parse_state(link):
     Raise ErrMsg if something went wrong.
     """
 
-    # we allow JSON to be provided directly in the link
+    # the link could be to a previously shortened link
+    if BUCKET_LINK_SEPARATOR in link:
+        # note that we don't really care about the URL base here; use whatever
+        #   neuroglancer you like, we just care about the blob name in the bucket
+        url_base, blob_name = link.split(BUCKET_LINK_SEPARATOR)
+        bucket = _get_client().get_bucket(SHORTNG_BUCKET)
+        blob = bucket.get_blob(blob_name)
+        if blob is None or not blob.exists():
+            msg = f"Could not find a link with the name {blob_name}"
+            logger.error(msg)
+            raise ErrMsg(msg)
+        return url_base, json.loads(blob.download_as_bytes())
+
+
+    # or we allow JSON to be provided directly in the link
     if link.startswith('{'):
         try:
             state = json.loads(link)
@@ -302,8 +305,7 @@ def _parse_state(link):
             return CLIO_URL, state
         except ValueError as ex:
             msg = (
-                "It appears that JSON was provided instead of "
-                f"a link, but I couldn't parse the JSON:\n{link}"
+                f"It appears that JSON was provided instead of a link, but I couldn't parse the JSON:\n{link}"
             )
             raise ErrMsg(msg) from ex
 
@@ -324,18 +326,6 @@ def _parse_state(link):
         raise ErrMsg(msg)
 
     return url_base, state
-
-def _get_short_link_state(link):
-    # note that we don't really care about the URL base here; use whatever
-    #   neuroglancer you like, we just care about the blob name in the bucket
-    url_base, blob_name = link.split(BUCKET_LINK_SEPARATOR)
-    bucket = _get_client().get_bucket(SHORTNG_BUCKET)
-    blob = bucket.get_blob(blob_name)
-    if blob is None or not blob.exists():
-        msg = f"Could not find a link with the name {blob_name}"
-        logger.error(msg)
-        raise ErrMsg(msg)
-    return url_base, json.loads(blob.download_as_bytes())
 
 
 def _blob_name(filename):
@@ -366,9 +356,9 @@ def _get_stored_hashed_password(filename):
     return data[:DKLEN_WIDTH], data[DKLEN_WIDTH:]
 
 
-def _store_password_salt(password_filename, hashed_password, salt):
+def _store_hashed_password_salt(password_filename, hashed_password, salt):
     """
-    Store the given password and salt in the password bucket.
+    Store the given password (hashed) and salt in the password bucket.
     """
     data = hashed_password + salt
     blob_name = _blob_name(password_filename)
@@ -446,6 +436,8 @@ def _web_response(url, bucket_path):
     """
     download_url = f"https://storage.googleapis.com/{bucket_path}"
 
+    # FIXME: The proper way to do this is with a jinja template.
+
     script = """
         <script type="text/javascript">
         function copy_to_clipboard(text) {
@@ -502,7 +494,7 @@ def _web_response(url, bucket_path):
         </style>
         """
 
-    page = f"""
+    page = dedent(f"""
         <!doctype html>
         <html lang="en">
         <head>
@@ -524,5 +516,5 @@ def _web_response(url, bucket_path):
             </div>
         </body>
         </html>
-        """
+        """)
     return Response(page, 200, mimetype='text/html')
