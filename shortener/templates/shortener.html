@@ -84,17 +84,23 @@
         <form action="/shortng" method="post">
             <input type="hidden" id="client" name="client" value="web">
 
-            <label for="filename">Filename (optional, appears in shortened link):</label>
-            <input type="text" id="filename" name="filename" placeholder="e.g. mylinks/link-1" title="Name of the filename to store. Slashes permitted, e.g. mylinks/link-1"  value="{{ filename }}">
+            <label for="text">Link:</label>
+            <input type="text" id="text" name="text" placeholder="Paste the neuroglancer link here" title="Paste the entire neuroglancer link exactly as it appears in your browser URL bar." value="{{ text }}">
 
             <label for="title">Title (optional, appears in tab name):</label>
             <input type="text" id="title" name="title" placeholder="e.g. Neuroglancer State" title="Overwrites the neuroglancer state title, setting the tab name."  value="{{ title }}">
 
-            <label for="password">Password (optional):</label>
-            <input type="password" id="password" name="password" placeholder="e.g. mySecretPassword" title="Required to re-save link with same filename in the future.">
+            <label for="filename">Filename (optional, appears in shortened link):</label>
+            <input type="text" id="filename" name="filename" placeholder="e.g. mylinks/link-1" title="Name of the filename to store. Slashes permitted, e.g. mylinks/link-1"  value="{{ filename }}">
 
-            <label for="text">Link:</label>
-            <input type="text" id="text" name="text" placeholder="Paste the neuroglancer link here" title="Paste the entire neuroglancer link exactly as it appears in your browser URL bar." value="{{ text }}">
+            <label for="password">Password (optional, controls resaving link; not required for viewing):</label>
+            <input type="password" id="password" name="password" placeholder="e.g. mySecretPassword" title="Required to re-save link with same filename in the future. Viewing the link does not requre the password.">
+
+            <!-- Toggle for password visibility -->
+            <label style="display: inline-flex; align-items: center; gap: 5px; margin-bottom: 20px; font-weight: normal">
+                <input type="checkbox" id="togglePassword">
+                Show Password
+            </label>
 
             <input type="submit" value="Store Link State">
         </form>
@@ -102,5 +108,13 @@
             Tip: In the FlyEM Slack workspace, this link shortener is available via the <code>/shortng</code> Slack command, albeit subject to Slack's limits on message size.
         </div>
     </div>
+    <script>
+        const togglePassword = document.querySelector('#togglePassword');
+        const password = document.querySelector('#password');
+        togglePassword.addEventListener('change', function() {
+            const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
+            password.setAttribute('type', type);
+        });
+    </script>
 </body>
 </html>
