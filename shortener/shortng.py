@@ -142,7 +142,7 @@ def _get_client():
 def _parse_web_request():
     title = request.form.get('title', None)
     filename = request.form.get('filename', None)
-    password = request.form.get('password', None)
+    password = request.form.get('password', "")
     link = (request.form.get('text', None))
     if link is not None:
         link = link.strip()
@@ -177,7 +177,7 @@ def _parse_slack_request(source):
 
     # our Slackbot does not support titles or passwords at this time
     title = None
-    password = None
+    password = ""
 
     return filename, title, password, link
 
@@ -189,7 +189,7 @@ def _parse_api_request(source):
         data = request.form
     title = data.get('title', None)
     filename = data.get('filename', None)
-    password = data.get('password', None)
+    password = data.get('password', "")
 
     # we don't care if title or filename are empty, but we need a link
     link = data.get('text', None)

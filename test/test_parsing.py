@@ -81,7 +81,7 @@ class RequestParsingTestCase(unittest.TestCase):
             filename, title, password, link, source = _parse_request()
             self.assertTrue(filename.endswith(".json"))
             self.assertIs(title, None)
-            self.assertIs(password, None)
+            self.assertIs(password, "")
             self.assertTrue(link == LINK)
             self.assertIs(source, RequestSource.WEB)
 
@@ -95,7 +95,7 @@ class RequestParsingTestCase(unittest.TestCase):
             filename, title, password, link, source = _parse_request()
             self.assertTrue(filename == f"{FILENAME}.json")
             self.assertIs(title, None)
-            self.assertIs(password, None)
+            self.assertIs(password, "")
             self.assertTrue(link == LINK)
             self.assertIs(source, RequestSource.SLACK)
 
@@ -118,7 +118,7 @@ class RequestParsingTestCase(unittest.TestCase):
             filename, title, password, link, source = _parse_request()
             self.assertTrue(filename.endswith(".json"))
             self.assertIs(title, None)
-            self.assertIs(password, None)
+            self.assertIs(password, "")
             self.assertTrue(link == LINK)
             self.assertIs(source, RequestSource.SLACK)
 
@@ -149,7 +149,7 @@ class RequestParsingTestCase(unittest.TestCase):
             filename, title, password, link, source = _parse_request()
             self.assertTrue(filename.endswith(".json"))
             self.assertIs(title, None)
-            self.assertIs(password, None)
+            self.assertIs(password, "")
             self.assertTrue(link == LINK)
             self.assertIs(source, RequestSource.API_PLAIN)
 
@@ -190,7 +190,7 @@ class RequestParsingTestCase(unittest.TestCase):
             filename, title, password, link, source = _parse_request()
             self.assertTrue(filename.endswith(".json"))
             self.assertIs(title, None)
-            self.assertIs(password, None)
+            self.assertIs(password, "")
             self.assertTrue(link == LINK)
             self.assertIs(source, RequestSource.API_JSON)
 
