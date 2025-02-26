@@ -1,0 +1,191 @@
+{
+    "dimensions": {
+      "x": [
+        8e-9,
+        "m"
+      ],
+      "y": [
+        8e-9,
+        "m"
+      ],
+      "z": [
+        8e-9,
+        "m"
+      ]
+    },
+    "position": [
+      16677.47265625,
+      21274.5,
+      18124.5
+    ],
+    "crossSectionScale": 54.37327962468417,
+    "crossSectionDepth": -37.62185354999912,
+    "projectionScale": 109219.18067006872,
+    "layers": [
+      {
+        "type": "image",
+        "source": "precomputed://gs://neuroglancer-janelia-flyem-hemibrain/emdata/clahe_yz/jpeg",
+        "tab": "source",
+        "name": "em"
+      },
+      {
+        "type": "segmentation",
+        "source": {
+          "url": "precomputed://gs://neuroglancer-janelia-flyem-hemibrain/v1.2/segmentation",
+          "subsources": {
+            "default": true,
+            "properties": true,
+            "mesh": true
+          },
+          "enableDefaultSubsources": false
+        },
+        "tab": "segments",
+        "objectAlpha": 0.3,
+        "segments": [],
+        "name": "segmentation"
+      },
+      {
+        "type": "segmentation",
+        "source": {
+          "url": "precomputed://gs://neuroglancer-janelia-flyem-hemibrain/v1.2/mito-objects-grouped",
+          "subsources": {
+            "default": true,
+            "mesh": true
+          },
+          "enableDefaultSubsources": false
+        },
+        "pick": false,
+        "tab": "segments",
+        "selectedAlpha": 0,
+        "saturation": 0,
+        "linkedSegmentationGroup": "segmentation",
+        "name": "mito-by-neuron"
+      },
+      {
+        "type": "annotation",
+        "source": "precomputed://gs://neuroglancer-janelia-flyem-hemibrain/v1.2/synapses",
+        "tab": "rendering",
+        "ignoreNullSegmentFilter": false,
+        "shader": "#uicontrol bool showPsds checkbox(default=true)\n#uicontrol vec3 preColor color(default=\"red\")\n#uicontrol vec3 postColor color(default=\"blue\")\n#uicontrol float preConfidence slider(min=0, max=1, default=0)\n#uicontrol float postConfidence slider(min=0, max=1, default=0)\n\nvoid main() {\n  setColor(defaultColor());\n  \n  setEndpointMarkerColor(\n    vec4(preColor, 0.5),\n    vec4(postColor, 0.5));\n  \n  if (showPsds) {\n    setEndpointMarkerSize(8.0, 4.0);\n  }\n  else {\n    setLineWidth(0.0);\n    setEndpointMarkerSize(8.0, 0.0);\n  }\n  \n  if (prop_pre_synaptic_confidence()< preConfidence ||\n      prop_post_synaptic_confidence()< postConfidence) discard;\n}\n",
+        "shaderControls": {
+          "showPsds": false
+        },
+        "linkedSegmentationLayer": {
+          "pre_synaptic_cell": "segmentation",
+          "post_synaptic_cell": "segmentation"
+        },
+        "filterBySegmentation": [
+          "pre_synaptic_cell"
+        ],
+        "name": "synapse",
+        "visible": false
+      },
+      {
+        "type": "segmentation",
+        "source": {
+          "url": "precomputed://gs://neuroglancer-janelia-flyem-hemibrain/v1.2/rois",
+          "subsources": {
+            "default": true,
+            "properties": true,
+            "mesh": true
+          },
+          "enableDefaultSubsources": false
+        },
+        "pick": false,
+        "tab": "segments",
+        "selectedAlpha": 0,
+        "saturation": 0,
+        "objectAlpha": 0.8,
+        "ignoreNullVisibleSet": false,
+        "meshSilhouetteRendering": 3,
+        "segments": [],
+        "name": "roi"
+      },
+      {
+        "type": "segmentation",
+        "source": {
+          "url": "precomputed://gs://neuroglancer-janelia-flyem-hemibrain/v1.2/mito-objects",
+          "subsources": {
+            "default": true,
+            "mesh": true
+          },
+          "enableDefaultSubsources": false
+        },
+        "tab": "rendering",
+        "segments": [],
+        "name": "mito-segments",
+        "archived": true
+      },
+      {
+        "type": "segmentation",
+        "source": {
+          "url": "precomputed://gs://neuroglancer-janelia-flyem-hemibrain/v1.2/mito-classes",
+          "subsources": {
+            "default": true,
+            "properties": true,
+            "mesh": true
+          },
+          "enableDefaultSubsources": false
+        },
+        "pick": false,
+        "tab": "segments",
+        "segments": [],
+        "segmentColors": {
+          "4": "#000000"
+        },
+        "name": "mito-classes",
+        "archived": true
+      },
+      {
+        "type": "segmentation",
+        "source": {
+          "url": "precomputed://gs://neuroglancer-janelia-flyem-hemibrain/mask_normalized_round6",
+          "subsources": {
+            "default": true,
+            "properties": true
+          },
+          "enableDefaultSubsources": false
+        },
+        "pick": false,
+        "tab": "segments",
+        "selectedAlpha": 0.53,
+        "segments": [],
+        "segmentColors": {
+          "7": "#000000"
+        },
+        "name": "voxel-classes",
+        "archived": true
+      },
+      {
+        "type": "segmentation",
+        "source": {
+          "url": "precomputed://gs://flyem-ng-layers/hemibrain/all_brain_roi",
+          "subsources": {
+            "default": true,
+            "properties": true,
+            "mesh": true
+          },
+          "enableDefaultSubsources": false
+        },
+        "pick": false,
+        "tab": "source",
+        "selectedAlpha": 0,
+        "saturation": 0,
+        "meshSilhouetteRendering": 4,
+        "segments": [
+          "1"
+        ],
+        "name": "brain-mask",
+        "archived": true
+      }
+    ],
+    "showSlices": false,
+    "selectedLayer": {
+      "visible": true,
+      "layer": "segmentation"
+    },
+    "layout": "xy-3d",
+    "layerListPanel": {
+      "visible": true
+    }
+  }
