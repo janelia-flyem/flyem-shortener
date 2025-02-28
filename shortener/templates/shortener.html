@@ -20,7 +20,7 @@
             padding: 30px;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            max-width: 500px;
+            max-width: 700px;
             width: 100%;
         }
         h2 {
@@ -87,14 +87,14 @@
             <label for="text">Link:</label>
             <input type="text" id="text" name="text" placeholder="Paste the neuroglancer link here" title="Paste the entire neuroglancer link exactly as it appears in your browser URL bar." value="{{ text }}">
 
-            <label for="title">Title (optional, appears in tab name):</label>
-            <input type="text" id="title" name="title" placeholder="e.g. Neuroglancer State" title="Overwrites the neuroglancer state title, setting the tab name."  value="{{ title }}">
+            <label for="title">Title (appears in tab name):</label>
+            <input type="text" id="title" name="title" placeholder="optional - e.g. 'My Beautiful Scene'" title="Overwrites the neuroglancer state title, setting the tab name."  value="{{ title }}">
 
-            <label for="filename">Filename (optional, appears in shortened link):</label>
-            <input type="text" id="filename" name="filename" placeholder="e.g. mylinks/link-1" title="Name of the filename to store. Slashes permitted, e.g. mylinks/link-1"  value="{{ filename }}">
+            <label for="filename">Filename (appears in shortened link):</label>
+            <input type="text" id="filename" name="filename" placeholder="optional - e.g. mylinks/link-1" title="Name of the filename to store. Slashes permitted, e.g. mylinks/link-1"  value="{{ filename }}">
 
-            <label for="password">Password (optional, controls resaving link; not required for viewing):</label>
-            <input type="password" id="password" name="password" placeholder="e.g. mySecretPassword" title="Required to re-save link with same filename in the future. Viewing the link does not require the password.">
+            <label for="password">Password (prevents others from overwriting your link; does not restrict viewing):</label>
+            <input type="password" id="password" name="password" placeholder="optional - e.g. mySecretPassword" title="Required to re-save link with same filename in the future. Viewing the link does not require the password.">
 
             <!-- Toggle for password visibility -->
             <label style="display: inline-flex; align-items: center; gap: 5px; margin-bottom: 20px; font-weight: normal">
