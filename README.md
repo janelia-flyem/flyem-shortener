@@ -73,7 +73,8 @@ NOTE: None of the above commands will actually DEPLOY the container.
 
 To run the (minimal, incomplete) tests:
 
+    pip install pytest
     cd flyem-shortener
-    python -m unittest
+    pytest test
 
 This must be done in an environment with the project's Python dependencies, and the Google Cloud credentials should be in `GOOGLE_APPLICATION_CREDENTIALS_CONTENTS`.   
