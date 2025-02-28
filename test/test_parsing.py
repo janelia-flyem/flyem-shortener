@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from shortener.app import app
-from shortener.shortng import (ErrMsg, _is_editable_password, logger,
+from shortener.shortng import (ErrMsg, _is_editable_password, logger, _parse_link,
                                _parse_request, _parse_state, RequestSource, CLIO_URL)
 
 FILENAME = "test-filename"
@@ -300,6 +300,21 @@ def test_parse_short_link_other_neuroglancer(hemibrain_data):
 def test_parse_short_link_invalid():
     with pytest.raises(ErrMsg):
         _parse_state("https://clio-ng.janelia.org/#!gs://flyem-user-links/short/no-such-link-exists", RequestSource.WEB)
+
+
+def test_parse_short_link_main_bucket():
+    # test we are not sensitive to the bucket name (this test and next one)
+    url_base, bucket_name, blob_name = _parse_link("https://clio-ng.janelia.org/#!gs://flyem-user-links/short/djo-test-hemibrain.json")
+    assert url_base == "https://clio-ng.janelia.org/"
+    assert bucket_name == "flyem-user-links"
+    assert blob_name == "short/djo-test-hemibrain.json"
+
+
+def test_parse_short_link_other_bucket():
+    url_base, bucket_name, blob_name = _parse_link("https://neuroglancer-demo.appspot.com/#!gs://flyem-views/hemibrain/v1.2/base.json")
+    assert url_base == "https://neuroglancer-demo.appspot.com/"
+    assert bucket_name == "flyem-views"
+    assert blob_name == "hemibrain/v1.2/base.json"
 
 
 def test_check_password():

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 SHORTNG_BUCKET = 'flyem-user-links'  # Both buckets owned by FlyEM-Private
 SHORTNG_PASSWORD_BUCKET = 'flyem-user-links-private'
 
-BUCKET_LINK_SEPARATOR = "#!gs://flyem-user-links/"
+BUCKET_LINK_SEPARATOR = "#!gs://"
 
 SHORTENER_URL = "https://shortng-bmcp5imp6q-uc.a.run.app/shortener.html"
 CLIO_URL = "https://clio-ng.janelia.org/"
@@ -26,16 +26,19 @@ CLIO_URL = "https://clio-ng.janelia.org/"
 SALT_WIDTH = 16
 DKLEN_WIDTH = 32
 
+
 class RequestSource(enum.Enum):
     WEB = "web"
     SLACK = "slack"
     API_PLAIN = "api_plain"
     API_JSON = "api_json"
 
+
 # expiration range on link editing; use one week
 EDIT_EXPIRATION = datetime.timedelta(days=7)
 # if we need effectively no expiration, use this:
 # EDIT_EXPIRATION = datetime.timedelta.max
+
 
 class ErrMsg(RuntimeError):
     def __init__(self, msg, source):
@@ -120,7 +123,7 @@ def _shortng():
             return _web_response(url, bucket_path)
         case RequestSource.API_JSON:
             return jsonify({"link": url})
-        case RequestSource.API_PLAIN :
+        case RequestSource.API_PLAIN:
             return Response(url, 200)
 
 
@@ -252,27 +255,24 @@ def _process_filename(filename):
 
     return filename
 
+
 def _parse_state(link, source):
     """
-    Extract the neuroglancer state JSON data from the given link.
-    Raise ErrMsg if something went wrong.
+    Extract the neuroglancer state JSON data from the given link. Returns
+    the URL base and the state JSON. Raise ErrMsg if something went wrong.
     """
 
     # the link could be to a previously shortened link
     if BUCKET_LINK_SEPARATOR in link:
-        # note that we don't really care about the URL base here; use whatever
-        #   neuroglancer you like, we just care about the blob name in the bucket
-        url_base, blob_name = link.split(BUCKET_LINK_SEPARATOR)
-        bucket = _get_client().get_bucket(SHORTNG_BUCKET)
-        blob = bucket.get_blob(blob_name)
-        if blob is None or not blob.exists():
-            msg = f"Could not find a link with the name {blob_name}"
+        url_base, bucket_name, blob_name = _parse_link(link)
+        data = _download_state_public(bucket_name, blob_name)
+        if data is None:
+            msg = f"Could not retrieve json state from bucket {bucket_name}, blob {blob_name}"
             logger.error(msg)
             raise ErrMsg(msg, source)
-        return url_base, json.loads(blob.download_as_bytes())
+        return url_base, data
 
-
-    # or we allow JSON to be provided directly in the link
+    # or we allow JSON to be provided directly in the link variable
     if link.startswith('{'):
         try:
             state = json.loads(link)
@@ -283,7 +283,6 @@ def _parse_state(link, source):
                 f"It appears that JSON was provided instead of a link, but I couldn't parse the JSON:\n{link}"
             )
             raise ErrMsg(msg, source) from ex
-
 
     # otherwise, we expect a link copied from neuroglancer
     try:
@@ -301,6 +300,16 @@ def _parse_state(link, source):
         raise ErrMsg(msg, source)
 
     return url_base, state
+
+
+def _parse_link(link):
+    """
+    split the link into the base url, the bucket name, and the blog name,
+    regardless of which neuroglancer instance or bucket it's in
+    """
+    url_base, blob_name = link.split(BUCKET_LINK_SEPARATOR)
+    bucket_name, blob_name = blob_name.split('/', 1)
+    return url_base, bucket_name, blob_name
 
 
 def _blob_name(filename):
@@ -404,6 +413,19 @@ def _hash_password(password, salt):
     """
     hashed_password = hashlib.scrypt(bytes(password, encoding='utf-8'), salt=salt, n=16384, r=8, p=1, dklen=DKLEN_WIDTH)
     return hashed_password
+
+
+def _download_state_public(bucket_name, blob_name):
+    """
+    download the given JSON state from a google bucket via a public URL
+    """
+    url = f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
+    try:
+        with urllib.request.urlopen(url) as response:
+            return json.loads(response.read())
+    except Exception as e:
+        logger.error(f"Error downloading json state from {url}: {e}")
+        return None
 
 
 def _upload_state(state, filename):
