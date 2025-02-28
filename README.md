@@ -71,9 +71,19 @@ Then:
 NOTE: None of the above commands will actually DEPLOY the container.
       The easiest way to do that is via the google cloud console.
 
+# Testing
+
 To run the (minimal, incomplete) tests:
 
+    pip install pytest
     cd flyem-shortener
-    python -m unittest
+    pytest test
 
-This must be done in an environment with the project's Python dependencies, and the Google Cloud credentials should be in `GOOGLE_APPLICATION_CREDENTIALS_CONTENTS`.   
+This must be done in an environment with the project's Python dependencies, and the Google Cloud credentials should be in `GOOGLE_APPLICATION_CREDENTIALS`.
+
+To just run the server locally, try this:
+
+    export GOOGLE_APPLICATION_CREDENTIALS_CONTENTS=$(cat $GOOGLE_APPLICATION_CREDENTIALS)
+    gunicorn --bind 0.0.0.0:8080 --workers 4 --threads 2 shortener.app:app
+
+...and then navigate to `http://localhost:8080` in a browser.
