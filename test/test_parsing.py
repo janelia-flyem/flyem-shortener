@@ -39,6 +39,12 @@ def setup_logger():
     logger.setLevel(logging.WARNING)
 
 
+@pytest.fixture(autouse=True)
+def setup_credentials():
+    with open(os.environ['GOOGLE_APPLICATION_CREDENTIALS'], 'r') as f:
+        os.environ['GOOGLE_APPLICATION_CREDENTIALS_CONTENTS'] = f.read()
+
+
 @pytest.fixture
 def hemibrain_data():
     test_dir_base = os.path.dirname(__file__)
