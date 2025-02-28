@@ -26,16 +26,19 @@ CLIO_URL = "https://clio-ng.janelia.org/"
 SALT_WIDTH = 16
 DKLEN_WIDTH = 32
 
+
 class RequestSource(enum.Enum):
     WEB = "web"
     SLACK = "slack"
     API_PLAIN = "api_plain"
     API_JSON = "api_json"
 
+
 # expiration range on link editing; use one week
 EDIT_EXPIRATION = datetime.timedelta(days=7)
 # if we need effectively no expiration, use this:
 # EDIT_EXPIRATION = datetime.timedelta.max
+
 
 class ErrMsg(RuntimeError):
     def __init__(self, msg, source):
@@ -120,7 +123,7 @@ def _shortng():
             return _web_response(url, bucket_path)
         case RequestSource.API_JSON:
             return jsonify({"link": url})
-        case RequestSource.API_PLAIN :
+        case RequestSource.API_PLAIN:
             return Response(url, 200)
 
 
@@ -252,6 +255,7 @@ def _process_filename(filename):
 
     return filename
 
+
 def _parse_state(link, source):
     """
     Extract the neuroglancer state JSON data from the given link. Returns
@@ -268,7 +272,6 @@ def _parse_state(link, source):
             raise ErrMsg(msg, source)
         return url_base, data
 
-
     # or we allow JSON to be provided directly in the link variable
     if link.startswith('{'):
         try:
@@ -280,7 +283,6 @@ def _parse_state(link, source):
                 f"It appears that JSON was provided instead of a link, but I couldn't parse the JSON:\n{link}"
             )
             raise ErrMsg(msg, source) from ex
-
 
     # otherwise, we expect a link copied from neuroglancer
     try:
@@ -308,6 +310,7 @@ def _parse_link(link):
     url_base, blob_name = link.split(BUCKET_LINK_SEPARATOR)
     bucket_name, blob_name = blob_name.split('/', 1)
     return url_base, bucket_name, blob_name
+
 
 def _blob_name(filename):
     return f"short/{filename}"
