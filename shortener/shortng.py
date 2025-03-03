@@ -381,7 +381,7 @@ def _raise_if_not_editable(filename, has_password_file, password, source):
             # no password; check time
             if not _is_editable_age(filename):
                 msg = (
-                    f"This link was last saved more than {EDIT_EXPIRATION} and cannot be resaved. Please create a new link instead, "
+                    f"This link was last saved more than {EDIT_EXPIRATION} ago and cannot be resaved. Please create a new link instead, "
                     f"or contact the site admin to reset the editing period. Note that links with passwords can "
                     f"be edited indefinitely."
                 )
