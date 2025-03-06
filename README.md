@@ -108,3 +108,27 @@ export GOOGLE_APPLICATION_CREDENTIALS_CONTENTS=$(cat $GOOGLE_APPLICATION_CREDENT
 docker build . -t flyem-shortener-test
 docker run -p 8080:8080 -e GOOGLE_APPLICATION_CREDENTIALS_CONTENTS flyem-shortener-test
 ```
+
+# Updating dependencies
+
+We list our high-level dependencies in `requirements.in`, and then we use `pip-compile` to generate `requirements.txt`, which serves as a fine-grained lock file.
+To use the container's own copy of `pip` to update the requirements, try this:
+
+```bash
+cd flyem-shortener
+
+# Build/run the container locally, with the current directory mounted inside.
+docker build -t flyem-shortener-test .
+docker run -p 8080:8080 -e GOOGLE_APPLICATION_CREDENTIALS_CONTENTS -v $(pwd):/flyem-shortener -it flyem-shortener-test /bin/bash
+
+# Inside the container...
+cd /flyem-shortener
+pip install pip-tools
+
+# This will update requirements.txt, which you'll see from outside the container.
+pip-compile requirements.in
+pip install -r requirements.txt
+exit
+```
+
+(Now commit `requirements.txt` and `requirements.in` to git.)
