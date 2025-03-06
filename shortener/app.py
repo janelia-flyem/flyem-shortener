@@ -26,6 +26,9 @@ configure_default_logging()
 logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
+# No limit on form size (e.g. very long links)
+app.config['MAX_FORM_MEMORY_SIZE'] = None
+
 # TODO: Limit origin list here: CORS(app, origins=[...])
 #CORS(app, origins=[r'.*\.janelia\.org', r'neuroglancer-demo\.appspot\.com'], supports_credentials=True)
 CORS(app)
