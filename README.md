@@ -47,26 +47,35 @@ To prevent accidental or malicious editing, two mechanisms are in place:
 
 To build and upload the container with Google Cloudbuild registry:
 
-    gcloud builds submit --tag gcr.io/flyem-private/flyem-shortener
+```bash
+gcloud builds submit --tag gcr.io/flyem-private/flyem-shortener
+```
 
 To build FASTER using the most recent container as the cache:
 
-    gcloud builds submit --config cloudbuild.yaml
+```bash
+gcloud builds submit --config cloudbuild.yaml
+```
 
 
 Alteratively, just use docker to build locally.
 
-    docker build . -t gcr.io/flyem-private/flyem-shortener
+```bash
+docker build . -t gcr.io/flyem-private/flyem-shortener
+```
 
 Then to push to the Google Artifact Registry, you need to authenticate with Google cloud and configure Docker use those credentials:
 
-    gcloud auth login
-    gcloud auth configure-docker     # first time only
+```bash
+gcloud auth login
+gcloud auth configure-docker     # first time only
+```
 
 Then:
 
-    docker push gcr.io/flyem-private/flyem-shortener
-
+```bash
+docker push gcr.io/flyem-private/flyem-shortener
+```
 
 NOTE: None of the above commands will actually DEPLOY the container.
       The easiest way to do that is via the google cloud console.
@@ -75,15 +84,27 @@ NOTE: None of the above commands will actually DEPLOY the container.
 
 To run the (minimal, incomplete) tests:
 
-    pip install pytest
-    cd flyem-shortener
-    pytest test
+```bash
+pip install pytest
+cd flyem-shortener
+pytest test
+```
 
 This must be done in an environment with the project's Python dependencies, and the Google Cloud credentials should be in `GOOGLE_APPLICATION_CREDENTIALS`.
 
-To just run the server locally, try this:
+To just run the server locally (assuming you have the dependencies installed), try this:
 
-    export GOOGLE_APPLICATION_CREDENTIALS_CONTENTS=$(cat $GOOGLE_APPLICATION_CREDENTIALS)
-    gunicorn --bind 0.0.0.0:8080 --workers 4 --threads 2 shortener.app:app
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS_CONTENTS=$(cat $GOOGLE_APPLICATION_CREDENTIALS)
+gunicorn --bind 0.0.0.0:8080 --workers 4 --threads 2 shortener.app:app
+```
 
 ...and then navigate to `http://localhost:8080` in a browser.
+
+To test locally using the Docker container:
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS_CONTENTS=$(cat $GOOGLE_APPLICATION_CREDENTIALS)
+docker build . -t flyem-shortener-test
+docker run -p 8080:8080 -e GOOGLE_APPLICATION_CREDENTIALS_CONTENTS flyem-shortener-test
+```
