@@ -11,9 +11,12 @@ ENV LANG=en_US.UTF-8
 RUN rm /etc/localtime \
  && ln -s /usr/share/zoneinfo/EST5EDT /etc/localtime
 
+# Technically we don't need to copy requirements.in,
+# but it might be nice to see when debugging.
+COPY requirements.in .
 
-RUN pip install --no-cache-dir flask flask-cors gunicorn google-cloud-storage
-
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy local code to the container image.
 ENV APP_HOME=/shortener-home
