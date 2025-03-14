@@ -40,6 +40,7 @@ def _shortng():
     return shortng()
 
 
+@app.route('/')
 @app.route('/shortener.html')
 def _shortener():
     from shortener.shortng import shortener
