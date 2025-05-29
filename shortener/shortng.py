@@ -369,23 +369,29 @@ def _raise_if_not_editable(filename, has_password_file, password, source):
     Raise an error if the given filename is not editable due to password
     or age restrictions.
     """
-    if _file_exists(SHORTNG_BUCKET, filename):
-        if has_password_file:
-            # check pwd
-            if not _is_editable_password(_password_filename(filename), password, source):
-                msg = (
-                    f"A password is required to overwite the link with filename {filename}. The provided password is missing or incorrect."
-                )
-                raise ErrMsg(msg, source)
-        else:
-            # no password; check time
-            if not _is_editable_age(filename):
-                msg = (
-                    f"This link was last saved more than {EDIT_EXPIRATION} ago and cannot be resaved. Please create a new link instead, "
-                    f"or contact the site admin to reset the editing period. Note that links with passwords can "
-                    f"be edited indefinitely."
-                )
-                raise ErrMsg(msg, source)
+    if not _file_exists(SHORTNG_BUCKET, filename):
+        return
+
+    if has_password_file:
+        if _is_editable_password(_password_filename(filename), password, source):
+            return
+
+        msg = (
+            f"A password is required to overwite the link with filename {filename}. "
+            "The provided password is missing or incorrect.",
+        )
+        raise ErrMsg(msg, source)
+
+    # no password; is it too old?
+    if _is_editable_age(filename):
+        return
+
+    msg = (
+        f"This link was last saved more than {EDIT_EXPIRATION} ago and cannot be resaved. "
+        "Please create a new link instead, or contact the site admin to reset the editing period. "
+        "Note that links with passwords can be edited indefinitely."
+    )
+    raise ErrMsg(msg, source)
 
 
 def _is_editable_age(filename):
