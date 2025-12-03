@@ -21,6 +21,7 @@ BUCKET_LINK_SEPARATOR = "#!gs://"
 
 SHORTENER_URL = "https://shortng-bmcp5imp6q-uc.a.run.app/shortener.html"
 CLIO_URL = "https://clio-ng.janelia.org/"
+NG_DEFAULT = "https://neuroglancer-demo.appspot.com/"
 
 # password hashing parameters
 SALT_WIDTH = 16
@@ -77,7 +78,7 @@ def _shortng():
 
     - Our web UI
     - Our Slack bot (/shortng)
-    - A generic http request
+    - A generic http request (API)
 
     In the case of the web UI, the filename, title, and
     link text are specified in separate html form elements.
@@ -85,19 +86,66 @@ def _shortng():
     In the case of the Slack bot, the filename and link are
     provided together, in the 'text' form element, and separated with a space.
 
-    In the case of a generic request (mostly for testing),
-    the link is in the body payload.
+    In the case of an API request, either:
+    - 'text' contains a neuroglancer link (URL with embedded JSON or shortened link)
+    - 'state' contains the neuroglancer JSON state directly, with optional 'domain'
 
     If no filename is provided, we construct a filename using a timestamp.
     """
-    filename, title, password, link, source = _parse_request()
+    filename, title, password, link, state, domain, source = _parse_request()
 
-    url_base, state = _parse_state(link, source)
+    if state is not None:
+        # State provided directly via API
+        url_base = domain
+    else:
+        # Parse state from the link
+        url_base, state = _parse_state(link, source)
+
+    try:
+        url, _editable_until = _shorten_core(url_base, state, filename, password, title)
+    except ValueError as ex:
+        raise ErrMsg(str(ex), source)
+
+    # and finally the response to the user
+    match source:
+        case RequestSource.SLACK:
+            return jsonify({"text": url, "response_type": "ephemeral"})
+        case RequestSource.WEB:
+            # Extract bucket_path from URL for web response
+            bucket_path = url.split(BUCKET_LINK_SEPARATOR)[1]
+            return _web_response(url, bucket_path)
+        case RequestSource.API_JSON:
+            return jsonify({"link": url})
+        case RequestSource.API_PLAIN:
+            return Response(url, 200)
+
+
+def _shorten_core(url_base, state, filename, password, title=None):
+    """
+    Core shortening logic. Takes pre-parsed inputs and returns the shortened URL
+    along with editability information.
+
+    Args:
+        url_base: The neuroglancer domain prefix (e.g., "https://clio-ng.janelia.org/")
+        state: The neuroglancer JSON state (already parsed as a dict)
+        filename: Optional filename; auto-generated if None or empty
+        password: Password for editing protection (empty string if none)
+        title: Optional title to embed in the state
+
+    Returns:
+        Tuple of (url, editable_until) where:
+          - url: The full shortened URL
+          - editable_until: datetime when editing expires (None if password-protected)
+
+    Raises:
+        ValueError: If the file exists but is not editable
+    """
+    filename = _process_filename(filename)
 
     # check if the link has already been shortened; if it has, check if
     #   it's editable (i.e. password is correct and it's not too old)
     has_password_file = _file_exists(SHORTNG_PASSWORD_BUCKET, _password_filename(filename))
-    _raise_if_not_editable(filename, has_password_file, password, source)
+    _raise_if_not_editable(filename, has_password_file, password)
 
     if title:
         state['title'] = title
@@ -108,23 +156,20 @@ def _shortng():
     logger.info(f"Completed {url}")
 
     # if password was provided and password file doesn't exist, store it; we store
-    #    in individual files per link to avoid race conditions
+    #   in individual files per link to avoid race conditions
     if password and not has_password_file:
         salt = _new_salt()
         hashed_password = _hash_password(password, salt)
         _store_hashed_password_salt(_password_filename(filename), hashed_password, salt)
         logger.info(f"Stored password for {_password_filename(filename)}")
 
-    # and finally the response to the user
-    match source:
-        case RequestSource.SLACK:
-            return jsonify({"text": url, "response_type": "ephemeral"})
-        case RequestSource.WEB:
-            return _web_response(url, bucket_path)
-        case RequestSource.API_JSON:
-            return jsonify({"link": url})
-        case RequestSource.API_PLAIN:
-            return Response(url, 200)
+    # Determine editable_until: None if password-protected, otherwise now + EDIT_EXPIRATION
+    if password or has_password_file:
+        editable_until = None
+    else:
+        editable_until = datetime.datetime.now(datetime.timezone.utc) + EDIT_EXPIRATION
+
+    return url, editable_until
 
 
 @functools.cache
@@ -149,7 +194,8 @@ def _parse_web_request():
     link = (request.form.get('text', None))
     if link is not None:
         link = link.strip()
-    return filename, title, password, link
+    # Web UI doesn't support direct state/domain input
+    return filename, title, password, link, None, None
 
 
 def _parse_slack_request(source):
@@ -178,11 +224,11 @@ def _parse_slack_request(source):
         filename = name_and_link[0]
         link = text_data[len(filename):].strip()
 
-    # our Slackbot does not support titles or passwords at this time
+    # our Slackbot does not support titles, passwords, or direct state/domain at this time
     title = None
     password = ""
 
-    return filename, title, password, link
+    return filename, title, password, link, None, None
 
 
 def _parse_api_request(source):
@@ -194,14 +240,21 @@ def _parse_api_request(source):
     filename = data.get('filename', None)
     password = data.get('password', "")
 
-    # we don't care if title or filename are empty, but we need a link
+    # Check for direct state input (JSON dict) as alternative to text/link
+    state = data.get('state', None)
+    if state is not None:
+        # state provided directly; domain is optional (defaults to NG_DEFAULT)
+        domain = data.get('domain', NG_DEFAULT)
+        return filename, title, password, None, state, domain
+
+    # Otherwise, we need a link in the 'text' field
     link = data.get('text', None)
     if link is not None:
         link = link.strip()
     if not link:
-        raise ErrMsg("No link was provided!", source)
+        raise ErrMsg("No link or state was provided!", source)
 
-    return filename, title, password, link
+    return filename, title, password, link, None, None
 
 
 def _parse_request():
@@ -210,7 +263,11 @@ def _parse_request():
     minor tweaks to them if needed (e.g. remove spaces).
 
     Returns:
-        (filename, title, password, link, request source)
+        (filename, title, password, link, state, domain, source)
+
+        If 'state' is provided directly (via API), link will be None and
+        state/domain will have values. Otherwise, link will have a value
+        and state/domain will be None.
     """
 
     if "Slackbot" in request.headers.get('User-Agent'):
@@ -225,18 +282,18 @@ def _parse_request():
 
     match source:
         case RequestSource.WEB:
-            filename, title, password, link = _parse_web_request()
+            filename, title, password, link, state, domain = _parse_web_request()
         case RequestSource.SLACK:
-            filename, title, password, link = _parse_slack_request(source)
+            filename, title, password, link, state, domain = _parse_slack_request(source)
         case RequestSource.API_PLAIN | RequestSource.API_JSON:
-            filename, title, password, link = _parse_api_request(source)
+            filename, title, password, link, state, domain = _parse_api_request(source)
         case _:
-            filename, title, password, link = None, None, None, None
+            filename, title, password, link, state, domain = None, None, None, None, None, None
 
-    if link is None:
-        raise ErrMsg("No link was provided!", source)
+    if link is None and state is None:
+        raise ErrMsg("No link or state was provided!", source)
 
-    return _process_filename(filename), title, password, link, source
+    return _process_filename(filename), title, password, link, state, domain, source
 
 
 def _process_filename(filename):
@@ -329,14 +386,14 @@ def _file_exists(bucket_name, filename):
     return blob is not None and blob.exists()
 
 
-def _get_stored_hashed_password(filename, source):
+def _get_stored_hashed_password(filename):
     bucket = _get_client().get_bucket(SHORTNG_PASSWORD_BUCKET)
     blob_name = _blob_name(filename)
     blob = bucket.get_blob(blob_name)
     if blob is None or not blob.exists():
         msg = f"Could not retrieve password file with the name {blob_name} in {SHORTNG_PASSWORD_BUCKET}"
         logger.error(msg)
-        raise ErrMsg(msg, source)
+        raise ValueError(msg)
     data = blob.download_as_bytes()
     return data[:DKLEN_WIDTH], data[DKLEN_WIDTH:]
 
@@ -350,7 +407,7 @@ def _store_hashed_password_salt(password_filename, hashed_password, salt):
     _upload_to_bucket(blob_name, data, SHORTNG_PASSWORD_BUCKET)
 
 
-def _is_editable_password(password_filename, password, source):
+def _is_editable_password(password_filename, password):
     """
     Determine whether the given filename is still editable based on password.
     """
@@ -359,33 +416,42 @@ def _is_editable_password(password_filename, password, source):
     if not _file_exists(SHORTNG_PASSWORD_BUCKET, password_filename):
         return True
 
-    stored_hashed_password, stored_salt = _get_stored_hashed_password(password_filename, source)
+    stored_hashed_password, stored_salt = _get_stored_hashed_password(password_filename)
     hashed_input_password = _hash_password(password, stored_salt)
     return stored_hashed_password == hashed_input_password
 
 
-def _raise_if_not_editable(filename, has_password_file, password, source):
+def _raise_if_not_editable(filename, has_password_file, password):
     """
     Raise an error if the given filename is not editable due to password
     or age restrictions.
+
+    Raises:
+        ValueError: If the file exists but cannot be edited.
     """
-    if _file_exists(SHORTNG_BUCKET, filename):
-        if has_password_file:
-            # check pwd
-            if not _is_editable_password(_password_filename(filename), password, source):
-                msg = (
-                    f"A password is required to overwite the link with filename {filename}. The provided password is missing or incorrect."
-                )
-                raise ErrMsg(msg, source)
-        else:
-            # no password; check time
-            if not _is_editable_age(filename):
-                msg = (
-                    f"This link was last saved more than {EDIT_EXPIRATION} ago and cannot be resaved. Please create a new link instead, "
-                    f"or contact the site admin to reset the editing period. Note that links with passwords can "
-                    f"be edited indefinitely."
-                )
-                raise ErrMsg(msg, source)
+    if not _file_exists(SHORTNG_BUCKET, filename):
+        return
+
+    if has_password_file:
+        if _is_editable_password(_password_filename(filename), password):
+            return
+
+        msg = (
+            f"A password is required to overwrite the link with filename {filename}. "
+            "The provided password is missing or incorrect."
+        )
+        raise ValueError(msg)
+
+    # no password; is it too old?
+    if _is_editable_age(filename):
+        return
+
+    msg = (
+        f"This link was last saved more than {EDIT_EXPIRATION} ago and cannot be resaved. "
+        "Please create a new link instead, or contact the site admin to reset the editing period. "
+        "Note that links with passwords can be edited indefinitely."
+    )
+    raise ValueError(msg)
 
 
 def _is_editable_age(filename):

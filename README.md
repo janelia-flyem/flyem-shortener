@@ -105,7 +105,7 @@ To test locally using the Docker container:
 
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS_CONTENTS=$(cat $GOOGLE_APPLICATION_CREDENTIALS)
-docker build . -t flyem-shortener-test
+docker build --platform linux/amd64 . -t gcr.io/flyem-private/flyem-shortener
 docker run -p 8080:8080 -e GOOGLE_APPLICATION_CREDENTIALS_CONTENTS flyem-shortener-test
 ```
 
